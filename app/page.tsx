@@ -1009,9 +1009,7 @@ export default function Home() {
             </div>
             <div className="space-y-3">
               {players.map((player, index) => {
-                const enemyOptions = players.filter(
-                  (candidate) => candidate.id !== player.id,
-                );
+                const enemyOptions = players;
 
                 return (
                   <article
@@ -1289,7 +1287,7 @@ export default function Home() {
                                   (candidate) =>
                                     !draft.avoidPlayerIds.includes(
                                       candidate.id,
-                                    ),
+                                    ) && candidate.id !== player.id,
                                 );
                                 return {
                                   ...draft,
@@ -1304,7 +1302,7 @@ export default function Home() {
                             }
                             className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
                           >
-                            Add all
+                            Add all others
                           </button>
                         </div>
                       </div>
@@ -1346,7 +1344,8 @@ export default function Home() {
                             >
                               {optionsForRow.map((option) => (
                                 <option key={option.id} value={option.id}>
-                                  {option.name.trim() || "(unnamed player)"}
+                                  {`${option.name.trim()}${option.id === player.id ? " (self)" : ""}` ||
+                                    "(unnamed player)"}
                                 </option>
                               ))}
                             </select>
