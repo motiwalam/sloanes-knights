@@ -40,6 +40,7 @@ const DEFAULT_COLORS = [
 ];
 const DEFAULT_LAYERS = 200;
 const DEFAULT_CANVAS_SIZE = 1000;
+const MAX_SPIRAL_SIZE = 2_000_000;
 
 let playerIdCounter = 1;
 
@@ -288,6 +289,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const spiralSize = (2 * layers + 1) ** 2 - 1;
+  const isSimulationTooBig = spiralSize > MAX_SPIRAL_SIZE;
   const cellSize = useMemo(
     () => computeCellSize(canvasSize, layers),
     [canvasSize, layers],
@@ -488,6 +490,11 @@ export default function Home() {
               Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
               + 1)^2 - 1
             </p>
+            {isSimulationTooBig ? (
+              <p className="text-sm text-amber-700">
+                The spiral size is quite big; this might take a while!
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
