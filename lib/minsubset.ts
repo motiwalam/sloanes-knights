@@ -22,12 +22,14 @@ export class MinSubset {
   }
 
   private find(x: number): number {
-    // path compression
-    while (this.parent[x] !== x) {
-      this.parent[x] = this.parent[this.parent[x]];
-      x = this.parent[x];
+    let root = x;
+    while (this.parent[root] !== root) root = this.parent[root];
+    while (this.parent[x] !== root) {
+      const next = this.parent[x];
+      this.parent[x] = root;
+      x = next;
     }
-    return x;
+    return root;
   }
 
   // delete x by linking it to successor x+1
@@ -39,7 +41,6 @@ export class MinSubset {
 
   // extract(S): remove all elements in S
   remove(S: number[]): void {
-    if (this.n < 0) throw new Error("Call build(N) first.");
     for (const x of S) {
       if (Number.isInteger(x) && x >= 0 && x <= this.n) {
         this.erase(x);
@@ -49,7 +50,6 @@ export class MinSubset {
 
   // min(): smallest remaining element, or null if empty
   min(): number | null {
-    if (this.n < 0) throw new Error("Call build(N) first.");
     const m = this.find(0);
     return m <= this.n ? m : null;
   }
