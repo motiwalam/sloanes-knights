@@ -38,6 +38,8 @@ const DEFAULT_COLORS = [
   "#a855f7",
   "#06b6d4",
 ];
+const DEFAULT_LAYERS = 200;
+const DEFAULT_CANVAS_SIZE = 1000;
 
 let playerIdCounter = 1;
 
@@ -234,17 +236,50 @@ function parseBulkMoveInput(input: string): {
 
 type Pixel = { color: string; position: Vec2d };
 
-export default function Home() {
-  const [layers, setLayers] = useState(2);
-  const [players, setPlayers] = useState<EditablePlayer[]>(() => {
-    const first = createPresetPlayerDraft([], PLAYER_PRESETS[0]);
-    const second = createPresetPlayerDraft([first], PLAYER_PRESETS[0]);
-    first.avoidPlayerIds = [second.id];
-    second.avoidPlayerIds = [first.id];
-    return [first, second];
+function computeCellSize(canvasSize: number, layers: number): number {
+  return Math.max(1, Math.floor(canvasSize / (2 * layers + 1)));
+}
+
+function createInitialPlayers(): EditablePlayer[] {
+  const first = createPresetPlayerDraft([], PLAYER_PRESETS[0]);
+  const second = createPresetPlayerDraft([first], PLAYER_PRESETS[0]);
+  first.avoidPlayerIds = [second.id];
+  second.avoidPlayerIds = [first.id];
+  return [first, second];
+}
+
+function getConfigurationSignature(config: {
+  layers: number;
+  canvasSize: number;
+  players: EditablePlayer[];
+}): string {
+  return JSON.stringify({
+    layers: config.layers,
+    canvasSize: config.canvasSize,
+    players: config.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      moveSet: player.moveSet,
+      avoidPlayerIds: player.avoidPlayerIds,
+    })),
   });
-  const [canvasSize, setCanvasSize] = useState(720);
-  const [pixels, setPixels] = useState<Pixel[]>([]);
+}
+
+export default function Home() {
+  const [layers, setLayers] = useState(DEFAULT_LAYERS);
+  const [players, setPlayers] =
+    useState<EditablePlayer[]>(createInitialPlayers);
+  const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS_SIZE);
+  const [renderedPixels, setRenderedPixels] = useState<Pixel[]>([]);
+  const [renderedCanvasSize, setRenderedCanvasSize] =
+    useState(DEFAULT_CANVAS_SIZE);
+  const [renderedCellSize, setRenderedCellSize] = useState(
+    computeCellSize(DEFAULT_CANVAS_SIZE, DEFAULT_LAYERS),
+  );
+  const [renderedConfigSignature, setRenderedConfigSignature] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [bulkMoveModalPlayerId, setBulkMoveModalPlayerId] = useState<
     string | null
@@ -254,9 +289,16 @@ export default function Home() {
 
   const spiralSize = (2 * layers + 1) ** 2 - 1;
   const cellSize = useMemo(
-    () => Math.max(1, Math.floor(canvasSize / (2 * layers + 1))),
+    () => computeCellSize(canvasSize, layers),
     [canvasSize, layers],
   );
+  const currentConfigSignature = useMemo(
+    () => getConfigurationSignature({ layers, canvasSize, players }),
+    [layers, canvasSize, players],
+  );
+  const hasUnrenderedConfigChanges =
+    renderedConfigSignature !== null &&
+    renderedConfigSignature !== currentConfigSignature;
   const isCanvasTooSmall = cellSize * (2 * layers + 1) > canvasSize;
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
@@ -290,24 +332,24 @@ export default function Home() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.clearRect(0, 0, canvasSize, canvasSize);
+    context.clearRect(0, 0, renderedCanvasSize, renderedCanvasSize);
     context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvasSize, canvasSize);
+    context.fillRect(0, 0, renderedCanvasSize, renderedCanvasSize);
 
-    const originX = canvasSize / 2;
-    const originY = canvasSize / 2;
+    const originX = renderedCanvasSize / 2;
+    const originY = renderedCanvasSize / 2;
 
-    for (const pixel of pixels) {
+    for (const pixel of renderedPixels) {
       const drawX = Math.round(
-        originX + pixel.position.x * cellSize - cellSize / 2,
+        originX + pixel.position.x * renderedCellSize - renderedCellSize / 2,
       );
       const drawY = Math.round(
-        originY - pixel.position.y * cellSize - cellSize / 2,
+        originY - pixel.position.y * renderedCellSize - renderedCellSize / 2,
       );
       context.fillStyle = pixel.color;
-      context.fillRect(drawX, drawY, cellSize, cellSize);
+      context.fillRect(drawX, drawY, renderedCellSize, renderedCellSize);
     }
-  }, [pixels, canvasSize, cellSize]);
+  }, [renderedPixels, renderedCanvasSize, renderedCellSize]);
 
   function updatePlayer(
     playerId: string,
@@ -365,13 +407,13 @@ export default function Home() {
       if (!Number.isInteger(canvasSize) || canvasSize <= 0) {
         throw new Error("Canvas size must be a positive integer.");
       }
-      console.log(
-        "running simulation with",
-        spiralSize,
-        buildSimulationPlayers(),
-      );
-      const simulation = createSimulation(spiralSize, buildSimulationPlayers());
-      setPixels(getPixels(simulation));
+      const simulationPlayers = buildSimulationPlayers();
+      console.log("running simulation with", spiralSize, simulationPlayers);
+      const simulation = createSimulation(spiralSize, simulationPlayers);
+      setRenderedPixels(getPixels(simulation));
+      setRenderedCanvasSize(canvasSize);
+      setRenderedCellSize(cellSize);
+      setRenderedConfigSignature(currentConfigSignature);
       setError(null);
     } catch (caught) {
       const message =
@@ -900,9 +942,13 @@ export default function Home() {
           <h2 className="mb-3 text-lg font-semibold">Canvas Output</h2>
           <canvas
             ref={canvasRef}
-            width={canvasSize}
-            height={canvasSize}
-            className="max-w-full border border-zinc-300 bg-white"
+            width={renderedCanvasSize}
+            height={renderedCanvasSize}
+            className={`max-w-full border bg-white ${
+              hasUnrenderedConfigChanges
+                ? "border-red-500 border-4"
+                : "border-zinc-300"
+            }`}
           />
         </section>
 
