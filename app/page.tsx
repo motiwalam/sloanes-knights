@@ -23,6 +23,7 @@ type EditablePlayer = {
   id: string;
   name: string;
   color: string;
+  isFolded: boolean;
   moveSet: { xInput: string; yInput: string }[];
   avoidPlayerIds: string[];
 };
@@ -117,6 +118,7 @@ function createPlayerDraft(players: EditablePlayer[]): EditablePlayer {
     id: `player-${playerIdCounter++}`,
     name: `Player #${getNextPlayerNumber(players)}`,
     color: getDefaultColor(players),
+    isFolded: true,
     moveSet: [],
     avoidPlayerIds: [],
   };
@@ -131,6 +133,7 @@ function createPresetPlayerDraft(
     id: `player-${playerIdCounter++}`,
     name: `${trimmedName} #${getNextPresetPlayerNumber(players, trimmedName)}`,
     color: getDefaultColor(players),
+    isFolded: true,
     moveSet: preset.moveSet.map(([x, y]) => ({
       xInput: String(x),
       yInput: String(y),
@@ -1010,364 +1013,502 @@ export default function Home() {
             <div className="space-y-3">
               {players.map((player, index) => {
                 const enemyOptions = players;
+                const isFolded = player.isFolded;
+                const trimmedPlayerName = player.name.trim();
+                const displayPlayerName =
+                  trimmedPlayerName.length > 0
+                    ? trimmedPlayerName
+                    : "Unnamed player";
+                const avoidedPlayerNames = player.avoidPlayerIds
+                  .map(
+                    (enemyId) =>
+                      players
+                        .find((candidate) => candidate.id === enemyId)
+                        ?.name.trim() ?? "",
+                  )
+                  .map((name) => (name.length > 0 ? name : "Unnamed player"))
+                  .join(", ");
 
                 return (
                   <article
                     key={player.id}
-                    className="space-y-2 rounded border p-2"
+                    className="group relative rounded border p-2"
                   >
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium">
-                        <span className="text-xs">{index + 1}.</span>{" "}
-                        {player.name}
-                      </h3>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPlayers((prev) => {
-                              if (index === 0) return prev;
-                              const next = [...prev];
-                              [next[index - 1], next[index]] = [
-                                next[index],
-                                next[index - 1],
-                              ];
-                              return next;
-                            })
-                          }
-                          className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updatePlayer(player.id, (draft) => ({
+                          ...draft,
+                          isFolded: !draft.isFolded,
+                        }))
+                      }
+                      className="absolute inset-x-0 top-0 z-10 h-6 cursor-pointer rounded-t"
+                      aria-label={
+                        isFolded
+                          ? `Unfold player ${index + 1} card`
+                          : `Fold player ${index + 1} card`
+                      }
+                      title={isFolded ? "Unfold card" : "Fold card"}
+                    >
+                      <span className="absolute left-1 top-0.5 text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                        <svg
+                          viewBox="0 0 16 16"
+                          className="h-3 w-3"
+                          aria-hidden="true"
                         >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPlayers((prev) => {
-                              if (index === prev.length - 1) return prev;
-                              const next = [...prev];
-                              [next[index], next[index + 1]] = [
-                                next[index + 1],
-                                next[index],
-                              ];
-                              return next;
-                            })
-                          }
-                          className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPlayers((prev) =>
-                              prev
-                                .filter(
-                                  (candidate) => candidate.id !== player.id,
-                                )
-                                .map((candidate) => ({
-                                  ...candidate,
-                                  avoidPlayerIds:
-                                    candidate.avoidPlayerIds.filter(
-                                      (enemyId) => enemyId !== player.id,
-                                    ),
-                                })),
-                            )
-                          }
-                          className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <label className="flex flex-col gap-1 text-sm">
-                        Name
-                        <input
-                          type="text"
-                          value={player.name}
-                          onChange={(event) =>
-                            updatePlayer(player.id, (draft) => ({
-                              ...draft,
-                              name: event.target.value,
-                            }))
-                          }
-                          className="rounded border border-zinc-300 px-2 py-1"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        Color
-                        <input
-                          type="color"
-                          value={player.color}
-                          onChange={(event) =>
-                            updatePlayer(player.id, (draft) => ({
-                              ...draft,
-                              color: event.target.value,
-                            }))
-                          }
-                          className="h-9 w-14 rounded border border-zinc-300"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="flex items-center gap-1 text-sm font-medium">
-                          Move set (dx, dy)
-                          <span
-                            className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
-                            title="A piece placed at (x, y) sees (x + dx, y + dy) for all (dx, dy) in the move set."
-                            aria-label="Move set help"
-                          >
-                            ?
-                          </span>
-                        </h4>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updatePlayer(player.id, (draft) => ({
-                                ...draft,
-                                moveSet: [
-                                  ...draft.moveSet,
-                                  { xInput: "1", yInput: "2" },
-                                ],
-                              }))
-                            }
-                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                          >
-                            Add move
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBulkMoveModalPlayerId(player.id);
-                              setBulkMoveInput("");
-                            }}
-                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                          >
-                            Bulk add
-                          </button>
-                        </div>
-                      </div>
-                      {player.moveSet.map((move, moveIndex) => (
-                        <div
-                          key={`${player.id}-move-${moveIndex}`}
-                          className="grid w-fit grid-cols-[auto_minmax(0,72px)_minmax(0,72px)] items-center justify-start gap-1"
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updatePlayer(player.id, (draft) => ({
-                                ...draft,
-                                moveSet: draft.moveSet.filter(
-                                  (_, index2) => index2 !== moveIndex,
-                                ),
-                              }))
-                            }
-                            className="grid h-6 w-6 place-items-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100"
-                            aria-label={`Delete player ${index + 1} move ${moveIndex + 1}`}
-                            title="Delete move"
-                          >
-                            <svg
-                              viewBox="0 0 16 16"
-                              className="h-3.5 w-3.5"
+                          <path
+                            d="M3.5 6.5l4.5 4.5 4.5-4.5"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+                    {isFolded ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-2 px-1 py-0.5">
+                            <span className="text-xs text-zinc-600">
+                              {index + 1}.
+                            </span>
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-sm border border-zinc-300"
+                              style={{ backgroundColor: player.color }}
                               aria-hidden="true"
-                            >
-                              <path
-                                d="M3.5 3.5l9 9m0-9l-9 9"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                              />
-                            </svg>
-                          </button>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={move.xInput}
-                            onChange={(event) =>
-                              updatePlayer(player.id, (draft) => {
-                                if (
-                                  !isPartialIntegerInput(event.target.value)
-                                ) {
-                                  return draft;
-                                }
-                                return {
-                                  ...draft,
-                                  moveSet: draft.moveSet.map(
-                                    (candidate, index2) =>
-                                      index2 === moveIndex
-                                        ? {
-                                            ...candidate,
-                                            xInput: event.target.value,
-                                          }
-                                        : candidate,
-                                  ),
-                                };
-                              })
-                            }
-                            className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
-                            aria-label={`Player ${index + 1} move ${moveIndex + 1} x`}
-                          />
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={move.yInput}
-                            onChange={(event) =>
-                              updatePlayer(player.id, (draft) => {
-                                if (
-                                  !isPartialIntegerInput(event.target.value)
-                                ) {
-                                  return draft;
-                                }
-                                return {
-                                  ...draft,
-                                  moveSet: draft.moveSet.map(
-                                    (candidate, index2) =>
-                                      index2 === moveIndex
-                                        ? {
-                                            ...candidate,
-                                            yInput: event.target.value,
-                                          }
-                                        : candidate,
-                                  ),
-                                };
-                              })
-                            }
-                            className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
-                            aria-label={`Player ${index + 1} move ${moveIndex + 1} y`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="flex items-center gap-1 text-sm font-medium">
-                          Enemies to avoid
-                          <span
-                            className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
-                            title="This player cannot place a piece on a cell that is seen by any of its enemies pieces."
-                            aria-label="Enemies to avoid help"
-                          >
-                            ?
-                          </span>
-                        </h4>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updatePlayer(player.id, (draft) => {
-                                const availableEnemy = enemyOptions.find(
-                                  (candidate) =>
-                                    !draft.avoidPlayerIds.includes(
-                                      candidate.id,
-                                    ),
-                                );
-                                if (!availableEnemy) return draft;
-                                return {
-                                  ...draft,
-                                  avoidPlayerIds: [
-                                    ...draft.avoidPlayerIds,
-                                    availableEnemy.id,
-                                  ],
-                                };
-                              })
-                            }
-                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                          >
-                            Add enemy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updatePlayer(player.id, (draft) => {
-                                const availableEnemies = enemyOptions.filter(
-                                  (candidate) =>
-                                    !draft.avoidPlayerIds.includes(
-                                      candidate.id,
-                                    ) && candidate.id !== player.id,
-                                );
-                                return {
-                                  ...draft,
-                                  avoidPlayerIds: [
-                                    ...draft.avoidPlayerIds,
-                                    ...availableEnemies.map(
-                                      (enemy) => enemy.id,
-                                    ),
-                                  ],
-                                };
-                              })
-                            }
-                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                          >
-                            Add all others
-                          </button>
-                        </div>
-                      </div>
-                      {player.avoidPlayerIds.map((enemyId, enemyIndex) => {
-                        const optionsForRow = enemyOptions.filter(
-                          (candidate) =>
-                            candidate.id === enemyId ||
-                            !player.avoidPlayerIds.includes(candidate.id),
-                        );
-
-                        return (
-                          <div
-                            key={`${player.id}-enemy-${enemyIndex}`}
-                            className="grid grid-cols-[1fr_auto] gap-2"
-                          >
-                            <select
-                              value={enemyId}
-                              onChange={(event) =>
-                                updatePlayer(player.id, (draft) => {
-                                  const nextEnemyId = event.target.value;
-                                  if (
-                                    nextEnemyId !== enemyId &&
-                                    draft.avoidPlayerIds.includes(nextEnemyId)
-                                  ) {
-                                    return draft;
-                                  }
-                                  return {
-                                    ...draft,
-                                    avoidPlayerIds: draft.avoidPlayerIds.map(
-                                      (candidate, index2) =>
-                                        index2 === enemyIndex
-                                          ? nextEnemyId
-                                          : candidate,
-                                    ),
-                                  };
-                                })
-                              }
-                              className="rounded border border-zinc-300 px-2 py-1 text-sm"
-                            >
-                              {optionsForRow.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {`${option.name.trim()}${option.id === player.id ? " (self)" : ""}` ||
-                                    "(unnamed player)"}
-                                </option>
-                              ))}
-                            </select>
+                            />
+                            <span className="truncate text-sm font-medium">
+                              {displayPlayerName}
+                            </span>
+                          </div>
+                          <div className="flex gap-1">
                             <button
                               type="button"
                               onClick={() =>
-                                updatePlayer(player.id, (draft) => ({
-                                  ...draft,
-                                  avoidPlayerIds: draft.avoidPlayerIds.filter(
-                                    (_, index2) => index2 !== enemyIndex,
-                                  ),
-                                }))
+                                setPlayers((prev) => {
+                                  if (index === 0) return prev;
+                                  const next = [...prev];
+                                  [next[index - 1], next[index]] = [
+                                    next[index],
+                                    next[index - 1],
+                                  ];
+                                  return next;
+                                })
                               }
-                              className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                              className="rounded border border-zinc-300 z-11 px-2 py-1 text-xs hover:bg-zinc-100"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlayers((prev) => {
+                                  if (index === prev.length - 1) return prev;
+                                  const next = [...prev];
+                                  [next[index], next[index + 1]] = [
+                                    next[index + 1],
+                                    next[index],
+                                  ];
+                                  return next;
+                                })
+                              }
+                              className="rounded border border-zinc-300 z-11 px-2 py-1 text-xs hover:bg-zinc-100"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlayers((prev) =>
+                                  prev
+                                    .filter(
+                                      (candidate) => candidate.id !== player.id,
+                                    )
+                                    .map((candidate) => ({
+                                      ...candidate,
+                                      avoidPlayerIds:
+                                        candidate.avoidPlayerIds.filter(
+                                          (enemyId) => enemyId !== player.id,
+                                        ),
+                                    })),
+                                )
+                              }
+                              className="rounded border border-red-300 z-11 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
                             >
                               Delete
                             </button>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          Avoids:{" "}
+                          {avoidedPlayerNames.length > 0
+                            ? avoidedPlayerNames
+                            : "(none)"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-medium">
+                            <span className="text-xs">{index + 1}.</span>{" "}
+                            {player.name}
+                          </h3>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlayers((prev) => {
+                                  if (index === 0) return prev;
+                                  const next = [...prev];
+                                  [next[index - 1], next[index]] = [
+                                    next[index],
+                                    next[index - 1],
+                                  ];
+                                  return next;
+                                })
+                              }
+                              className="rounded border border-zinc-300 z-11 px-2 py-1 text-xs hover:bg-zinc-100"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlayers((prev) => {
+                                  if (index === prev.length - 1) return prev;
+                                  const next = [...prev];
+                                  [next[index], next[index + 1]] = [
+                                    next[index + 1],
+                                    next[index],
+                                  ];
+                                  return next;
+                                })
+                              }
+                              className="rounded border border-zinc-300 z-11 px-2 py-1 text-xs hover:bg-zinc-100"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlayers((prev) =>
+                                  prev
+                                    .filter(
+                                      (candidate) => candidate.id !== player.id,
+                                    )
+                                    .map((candidate) => ({
+                                      ...candidate,
+                                      avoidPlayerIds:
+                                        candidate.avoidPlayerIds.filter(
+                                          (enemyId) => enemyId !== player.id,
+                                        ),
+                                    })),
+                                )
+                              }
+                              className="rounded border border-red-300 z-11 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                          <label className="flex flex-col gap-1 text-sm">
+                            Name
+                            <input
+                              type="text"
+                              value={player.name}
+                              onChange={(event) =>
+                                updatePlayer(player.id, (draft) => ({
+                                  ...draft,
+                                  name: event.target.value,
+                                }))
+                              }
+                              className="rounded border border-zinc-300 px-2 py-1"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-sm">
+                            Color
+                            <input
+                              type="color"
+                              value={player.color}
+                              onChange={(event) =>
+                                updatePlayer(player.id, (draft) => ({
+                                  ...draft,
+                                  color: event.target.value,
+                                }))
+                              }
+                              className="h-9 w-14 rounded border border-zinc-300"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="flex items-center gap-1 text-sm font-medium">
+                              Move set (dx, dy)
+                              <span
+                                className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
+                                title="A piece placed at (x, y) sees (x + dx, y + dy) for all (dx, dy) in the move set."
+                                aria-label="Move set help"
+                              >
+                                ?
+                              </span>
+                            </h4>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updatePlayer(player.id, (draft) => ({
+                                    ...draft,
+                                    moveSet: [
+                                      ...draft.moveSet,
+                                      { xInput: "1", yInput: "2" },
+                                    ],
+                                  }))
+                                }
+                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                              >
+                                Add move
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBulkMoveModalPlayerId(player.id);
+                                  setBulkMoveInput("");
+                                }}
+                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                              >
+                                Bulk add
+                              </button>
+                            </div>
+                          </div>
+                          {player.moveSet.map((move, moveIndex) => (
+                            <div
+                              key={`${player.id}-move-${moveIndex}`}
+                              className="grid w-fit grid-cols-[auto_minmax(0,72px)_minmax(0,72px)] items-center justify-start gap-1"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updatePlayer(player.id, (draft) => ({
+                                    ...draft,
+                                    moveSet: draft.moveSet.filter(
+                                      (_, index2) => index2 !== moveIndex,
+                                    ),
+                                  }))
+                                }
+                                className="grid h-6 w-6 place-items-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100"
+                                aria-label={`Delete player ${index + 1} move ${moveIndex + 1}`}
+                                title="Delete move"
+                              >
+                                <svg
+                                  viewBox="0 0 16 16"
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M3.5 3.5l9 9m0-9l-9 9"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={move.xInput}
+                                onChange={(event) =>
+                                  updatePlayer(player.id, (draft) => {
+                                    if (
+                                      !isPartialIntegerInput(event.target.value)
+                                    ) {
+                                      return draft;
+                                    }
+                                    return {
+                                      ...draft,
+                                      moveSet: draft.moveSet.map(
+                                        (candidate, index2) =>
+                                          index2 === moveIndex
+                                            ? {
+                                                ...candidate,
+                                                xInput: event.target.value,
+                                              }
+                                            : candidate,
+                                      ),
+                                    };
+                                  })
+                                }
+                                className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
+                                aria-label={`Player ${index + 1} move ${moveIndex + 1} x`}
+                              />
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={move.yInput}
+                                onChange={(event) =>
+                                  updatePlayer(player.id, (draft) => {
+                                    if (
+                                      !isPartialIntegerInput(event.target.value)
+                                    ) {
+                                      return draft;
+                                    }
+                                    return {
+                                      ...draft,
+                                      moveSet: draft.moveSet.map(
+                                        (candidate, index2) =>
+                                          index2 === moveIndex
+                                            ? {
+                                                ...candidate,
+                                                yInput: event.target.value,
+                                              }
+                                            : candidate,
+                                      ),
+                                    };
+                                  })
+                                }
+                                className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
+                                aria-label={`Player ${index + 1} move ${moveIndex + 1} y`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="flex items-center gap-1 text-sm font-medium">
+                              Enemies to avoid
+                              <span
+                                className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
+                                title="This player cannot place a piece on a cell that is seen by any of its enemies pieces."
+                                aria-label="Enemies to avoid help"
+                              >
+                                ?
+                              </span>
+                            </h4>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updatePlayer(player.id, (draft) => {
+                                    const availableEnemy = enemyOptions.find(
+                                      (candidate) =>
+                                        !draft.avoidPlayerIds.includes(
+                                          candidate.id,
+                                        ),
+                                    );
+                                    if (!availableEnemy) return draft;
+                                    return {
+                                      ...draft,
+                                      avoidPlayerIds: [
+                                        ...draft.avoidPlayerIds,
+                                        availableEnemy.id,
+                                      ],
+                                    };
+                                  })
+                                }
+                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                              >
+                                Add enemy
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updatePlayer(player.id, (draft) => {
+                                    const availableEnemies =
+                                      enemyOptions.filter(
+                                        (candidate) =>
+                                          !draft.avoidPlayerIds.includes(
+                                            candidate.id,
+                                          ) && candidate.id !== player.id,
+                                      );
+                                    return {
+                                      ...draft,
+                                      avoidPlayerIds: [
+                                        ...draft.avoidPlayerIds,
+                                        ...availableEnemies.map(
+                                          (enemy) => enemy.id,
+                                        ),
+                                      ],
+                                    };
+                                  })
+                                }
+                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                              >
+                                Add all others
+                              </button>
+                            </div>
+                          </div>
+                          {player.avoidPlayerIds.map((enemyId, enemyIndex) => {
+                            const optionsForRow = enemyOptions.filter(
+                              (candidate) =>
+                                candidate.id === enemyId ||
+                                !player.avoidPlayerIds.includes(candidate.id),
+                            );
+
+                            return (
+                              <div
+                                key={`${player.id}-enemy-${enemyIndex}`}
+                                className="grid grid-cols-[1fr_auto] gap-2"
+                              >
+                                <select
+                                  value={enemyId}
+                                  onChange={(event) =>
+                                    updatePlayer(player.id, (draft) => {
+                                      const nextEnemyId = event.target.value;
+                                      if (
+                                        nextEnemyId !== enemyId &&
+                                        draft.avoidPlayerIds.includes(
+                                          nextEnemyId,
+                                        )
+                                      ) {
+                                        return draft;
+                                      }
+                                      return {
+                                        ...draft,
+                                        avoidPlayerIds:
+                                          draft.avoidPlayerIds.map(
+                                            (candidate, index2) =>
+                                              index2 === enemyIndex
+                                                ? nextEnemyId
+                                                : candidate,
+                                          ),
+                                      };
+                                    })
+                                  }
+                                  className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                                >
+                                  {optionsForRow.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {`${option.name.trim()}${option.id === player.id ? " (self)" : ""}` ||
+                                        "(unnamed player)"}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updatePlayer(player.id, (draft) => ({
+                                      ...draft,
+                                      avoidPlayerIds:
+                                        draft.avoidPlayerIds.filter(
+                                          (_, index2) => index2 !== enemyIndex,
+                                        ),
+                                    }))
+                                  }
+                                  className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </article>
                 );
               })}
