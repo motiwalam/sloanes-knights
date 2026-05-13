@@ -38,7 +38,6 @@ const DEFAULT_COLORS = [
   "#a855f7",
   "#06b6d4",
 ];
-const MIN_RECOMMENDED_CELL_SIZE = 1;
 
 let playerIdCounter = 1;
 
@@ -255,10 +254,10 @@ export default function Home() {
 
   const spiralSize = (2 * layers + 1) ** 2 - 1;
   const cellSize = useMemo(
-    () => Math.max(1, Math.floor(canvasSize / Math.sqrt(spiralSize))),
-    [canvasSize, spiralSize],
+    () => Math.max(1, Math.floor(canvasSize / (2 * layers + 1))),
+    [canvasSize, layers],
   );
-  const isCellSizeTooSmall = cellSize < MIN_RECOMMENDED_CELL_SIZE;
+  const isCanvasTooSmall = cellSize * (2 * layers + 1) > canvasSize;
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
   const bulkMoveParse = useMemo(
@@ -472,10 +471,9 @@ export default function Home() {
               Computed cell size:{" "}
               <span className="font-mono">{cellSize}px</span>
             </p>
-            {isCellSizeTooSmall ? (
+            {isCanvasTooSmall ? (
               <p className="text-sm text-amber-700">
-                The computed cell size is very small ({cellSize}px). Increase
-                the canvas size to keep the spiral visible.
+                The canvas size may be too small to render the entire spiral.
               </p>
             ) : null}
           </div>
