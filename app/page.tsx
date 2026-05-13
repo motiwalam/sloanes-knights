@@ -1018,7 +1018,8 @@ export default function Home() {
                   >
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium">
-                        Player {index + 1} ({player.name})
+                        <span className="text-xs">{index + 1}.</span>{" "}
+                        {player.name}
                       </h3>
                       <div className="flex gap-1">
                         <button
