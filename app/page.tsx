@@ -241,8 +241,7 @@ export default function Home() {
     const second = createPresetPlayerDraft([first], PLAYER_PRESETS[0]);
     return [first, second];
   });
-  const [canvasWidth, setCanvasWidth] = useState(720);
-  const [canvasHeight, setCanvasHeight] = useState(720);
+  const [canvasSize, setCanvasSize] = useState(720);
   const [pixels, setPixels] = useState<Pixel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [bulkMoveModalPlayerId, setBulkMoveModalPlayerId] = useState<
@@ -256,9 +255,9 @@ export default function Home() {
     () =>
       Math.max(
         1,
-        Math.floor(Math.min(canvasWidth, canvasHeight) / Math.sqrt(spiralSize)),
+        Math.floor(canvasSize / Math.sqrt(spiralSize)),
       ),
-    [canvasWidth, canvasHeight, spiralSize],
+    [canvasSize, spiralSize],
   );
   const isCellSizeTooSmall = cellSize < MIN_RECOMMENDED_CELL_SIZE;
   const bulkMoveTargetPlayer =
@@ -293,12 +292,12 @@ export default function Home() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.clearRect(0, 0, canvasWidth, canvasHeight);
+    context.clearRect(0, 0, canvasSize, canvasSize);
     context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvasWidth, canvasHeight);
+    context.fillRect(0, 0, canvasSize, canvasSize);
 
-    const originX = canvasWidth / 2;
-    const originY = canvasHeight / 2;
+    const originX = canvasSize / 2;
+    const originY = canvasSize / 2;
 
     for (const pixel of pixels) {
       const drawX = Math.round(
@@ -310,7 +309,7 @@ export default function Home() {
       context.fillStyle = pixel.color;
       context.fillRect(drawX, drawY, cellSize, cellSize);
     }
-  }, [pixels, canvasWidth, canvasHeight, cellSize]);
+  }, [pixels, canvasSize, cellSize]);
 
   function updatePlayer(
     playerId: string,
@@ -365,11 +364,8 @@ export default function Home() {
       if (!Number.isInteger(layers) || layers < 0) {
         throw new Error("Layers must be a non-negative integer.");
       }
-      if (!Number.isInteger(canvasWidth) || canvasWidth <= 0) {
-        throw new Error("Canvas width must be a positive integer.");
-      }
-      if (!Number.isInteger(canvasHeight) || canvasHeight <= 0) {
-        throw new Error("Canvas height must be a positive integer.");
+      if (!Number.isInteger(canvasSize) || canvasSize <= 0) {
+        throw new Error("Canvas size must be a positive integer.");
       }
       console.log(
         "running simulation with",
@@ -441,31 +437,16 @@ export default function Home() {
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
             <h2 className="font-medium">Canvas</h2>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <label className="flex flex-col gap-1 text-sm">
-                Width
+                Canvas size
                 <input
                   type="number"
                   min={1}
                   step={1}
-                  value={canvasWidth}
+                  value={canvasSize}
                   onChange={(event) =>
-                    setCanvasWidth(
-                      Math.max(1, parseIntegerInput(event.target.value, 1)),
-                    )
-                  }
-                  className="rounded border border-zinc-300 px-2 py-1"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                Height
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={canvasHeight}
-                  onChange={(event) =>
-                    setCanvasHeight(
+                    setCanvasSize(
                       Math.max(1, parseIntegerInput(event.target.value, 1)),
                     )
                   }
@@ -480,7 +461,7 @@ export default function Home() {
             {isCellSizeTooSmall ? (
               <p className="text-sm text-amber-700">
                 The computed cell size is very small ({cellSize}px). Increase
-                the canvas width or height to keep the spiral visible.
+                the canvas size to keep the spiral visible.
               </p>
             ) : null}
           </div>
@@ -891,8 +872,8 @@ export default function Home() {
           <h2 className="mb-3 text-lg font-semibold">Canvas Output</h2>
           <canvas
             ref={canvasRef}
-            width={canvasWidth}
-            height={canvasHeight}
+            width={canvasSize}
+            height={canvasSize}
             className="max-w-full border border-zinc-300 bg-white"
           />
         </section>
