@@ -153,4 +153,4 @@ function gridToSpiral(gridPos: Vec2d): number {
 }
 
 export type { MoveSet, Player, Simulation, Vec2d };
-export { createSimulation, getPixels };
+export { createSimulation, getPixels, spiralToGrid };

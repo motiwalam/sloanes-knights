@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createSimulation,
   getPixels,
+  spiralToGrid,
   type Player,
   type Vec2d,
 } from "@/lib/simulation";
@@ -40,7 +41,10 @@ const DEFAULT_COLORS = [
 ];
 const DEFAULT_LAYERS = 200;
 const DEFAULT_CANVAS_SIZE = 1000;
+const DEFAULT_SPIRAL_SIZE = (2 * DEFAULT_LAYERS + 1) ** 2 - 1;
 const MAX_SPIRAL_SIZE = 2_000_000;
+const MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE = 8;
+const MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE = 100_000;
 
 let playerIdCounter = 1;
 
@@ -241,6 +245,66 @@ function computeCellSize(canvasSize: number, layers: number): number {
   return Math.max(1, Math.floor(canvasSize / (2 * layers + 1)));
 }
 
+function countDigits(value: number): number {
+  return Math.abs(value).toString().length;
+}
+
+function computeSpiralNumberFontSize(cellSize: number, spiralSize: number): number {
+  return Math.max(1, Math.floor(cellSize / countDigits(spiralSize)));
+}
+
+function isSpiralNumberRenderUnsafeForConfig(
+  layers: number,
+  canvasSize: number,
+): boolean {
+  const spiralSize = (2 * layers + 1) ** 2 - 1;
+  const cellSize = computeCellSize(canvasSize, layers);
+  const spiralNumberFontSize = computeSpiralNumberFontSize(cellSize, spiralSize);
+  return (
+    spiralNumberFontSize < MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE ||
+    spiralSize > MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE
+  );
+}
+
+function expandShortHex(hex: string): string {
+  return hex
+    .split("")
+    .map((char) => `${char}${char}`)
+    .join("");
+}
+
+function parseHexColor(color: string): { r: number; g: number; b: number } | null {
+  const normalized = color.trim();
+  const shortMatch = /^#([0-9a-fA-F]{3})$/.exec(normalized);
+  const longMatch = /^#([0-9a-fA-F]{6})$/.exec(normalized);
+
+  const hex = shortMatch
+    ? expandShortHex(shortMatch[1])
+    : longMatch
+      ? longMatch[1]
+      : null;
+  if (!hex) {
+    return null;
+  }
+
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function getContrastTextColor(backgroundColor: string): string {
+  const parsed = parseHexColor(backgroundColor);
+  if (!parsed) {
+    return "#111111";
+  }
+
+  const luminance =
+    (0.299 * parsed.r + 0.587 * parsed.g + 0.114 * parsed.b) / 255;
+  return luminance > 0.5 ? "#111111" : "#ffffff";
+}
+
 function createInitialPlayers(): EditablePlayer[] {
   const first = createPresetPlayerDraft([], PLAYER_PRESETS[0]);
   const second = createPresetPlayerDraft([first], PLAYER_PRESETS[0]);
@@ -253,10 +317,14 @@ function getConfigurationSignature(config: {
   layers: number;
   canvasSize: number;
   players: EditablePlayer[];
+  renderSpiralNumbers: boolean;
+  forceSpiralNumberRenderAnyway: boolean;
 }): string {
   return JSON.stringify({
     layers: config.layers,
     canvasSize: config.canvasSize,
+    renderSpiralNumbers: config.renderSpiralNumbers,
+    forceSpiralNumberRenderAnyway: config.forceSpiralNumberRenderAnyway,
     players: config.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -275,9 +343,19 @@ export default function Home() {
   const [renderedPixels, setRenderedPixels] = useState<Pixel[]>([]);
   const [renderedCanvasSize, setRenderedCanvasSize] =
     useState(DEFAULT_CANVAS_SIZE);
+  const [renderedSpiralSize, setRenderedSpiralSize] =
+    useState(DEFAULT_SPIRAL_SIZE);
   const [renderedCellSize, setRenderedCellSize] = useState(
     computeCellSize(DEFAULT_CANVAS_SIZE, DEFAULT_LAYERS),
   );
+  const [renderSpiralNumbers, setRenderSpiralNumbers] = useState(false);
+  const [forceSpiralNumberRenderAnyway, setForceSpiralNumberRenderAnyway] =
+    useState(false);
+  const [showSpiralNumberRenderWarning, setShowSpiralNumberRenderWarning] =
+    useState(false);
+  const [renderedRenderSpiralNumbers, setRenderedRenderSpiralNumbers] =
+    useState(false);
+  const [renderedForceSpiralNumberRenderAnyway, setRenderedForceSpiralNumberRenderAnyway] = useState(false);
   const [renderedConfigSignature, setRenderedConfigSignature] = useState<
     string | null
   >(null);
@@ -295,13 +373,54 @@ export default function Home() {
     [canvasSize, layers],
   );
   const currentConfigSignature = useMemo(
-    () => getConfigurationSignature({ layers, canvasSize, players }),
-    [layers, canvasSize, players],
+    () =>
+      getConfigurationSignature({
+        layers,
+        canvasSize,
+        players,
+        renderSpiralNumbers,
+        forceSpiralNumberRenderAnyway,
+      }),
+    [
+      layers,
+      canvasSize,
+      players,
+      renderSpiralNumbers,
+      forceSpiralNumberRenderAnyway,
+    ],
   );
   const hasUnrenderedConfigChanges =
     renderedConfigSignature !== null &&
     renderedConfigSignature !== currentConfigSignature;
   const isCanvasTooSmall = cellSize * (2 * layers + 1) > canvasSize;
+  const spiralNumberFontSize = useMemo(
+    () => computeSpiralNumberFontSize(cellSize, spiralSize),
+    [cellSize, spiralSize],
+  );
+  const isSpiralNumberFontTooSmall =
+    spiralNumberFontSize < MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE;
+  const isSpiralNumberTextTooLarge =
+    spiralSize > MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE;
+  const isSpiralNumberRenderUnsafe =
+    isSpiralNumberFontTooSmall || isSpiralNumberTextTooLarge;
+  const renderedSpiralNumberFontSize = useMemo(
+    () => computeSpiralNumberFontSize(renderedCellSize, renderedSpiralSize),
+    [renderedCellSize, renderedSpiralSize],
+  );
+  const isRenderedSpiralNumberFontTooSmall =
+    renderedSpiralNumberFontSize < MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE;
+  const isRenderedSpiralNumberTextTooLarge =
+    renderedSpiralSize > MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE;
+  const isRenderedSpiralNumberRenderUnsafe =
+    isRenderedSpiralNumberFontTooSmall || isRenderedSpiralNumberTextTooLarge;
+  const shouldRenderSpiralNumbers =
+    renderedRenderSpiralNumbers &&
+    (!isRenderedSpiralNumberRenderUnsafe ||
+      renderedForceSpiralNumberRenderAnyway);
+  const shouldShowSpiralNumberRenderWarning =
+    showSpiralNumberRenderWarning &&
+    isSpiralNumberRenderUnsafe &&
+    !renderSpiralNumbers;
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
   const bulkMoveParse = useMemo(
@@ -351,7 +470,46 @@ export default function Home() {
       context.fillStyle = pixel.color;
       context.fillRect(drawX, drawY, renderedCellSize, renderedCellSize);
     }
-  }, [renderedPixels, renderedCanvasSize, renderedCellSize]);
+
+    if (shouldRenderSpiralNumbers) {
+      const pixelColorsByPosition = new Map<string, string>();
+      for (const pixel of renderedPixels) {
+        pixelColorsByPosition.set(
+          `${pixel.position.x},${pixel.position.y}`,
+          pixel.color,
+        );
+      }
+
+      context.font = `${renderedSpiralNumberFontSize}px sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+
+      for (let n = 0; n <= renderedSpiralSize; n += 1) {
+        const grid = spiralToGrid(n);
+        const drawX = Math.round(
+          originX + grid.x * renderedCellSize - renderedCellSize / 2,
+        );
+        const drawY = Math.round(
+          originY - grid.y * renderedCellSize - renderedCellSize / 2,
+        );
+        const backgroundColor =
+          pixelColorsByPosition.get(`${grid.x},${grid.y}`) ?? "#ffffff";
+        context.fillStyle = getContrastTextColor(backgroundColor);
+        context.fillText(
+          String(n),
+          drawX + renderedCellSize / 2,
+          drawY + renderedCellSize / 2,
+        );
+      }
+    }
+  }, [
+    shouldRenderSpiralNumbers,
+    renderedPixels,
+    renderedCanvasSize,
+    renderedCellSize,
+    renderedSpiralSize,
+    renderedSpiralNumberFontSize,
+  ]);
 
   function updatePlayer(
     playerId: string,
@@ -414,7 +572,10 @@ export default function Home() {
       const simulation = createSimulation(spiralSize, simulationPlayers);
       setRenderedPixels(getPixels(simulation));
       setRenderedCanvasSize(canvasSize);
+      setRenderedSpiralSize(spiralSize);
       setRenderedCellSize(cellSize);
+      setRenderedRenderSpiralNumbers(renderSpiralNumbers);
+      setRenderedForceSpiralNumberRenderAnyway(forceSpiralNumberRenderAnyway);
       setRenderedConfigSignature(currentConfigSignature);
       setError(null);
     } catch (caught) {
@@ -478,11 +639,21 @@ export default function Home() {
                 min={0}
                 step={1}
                 value={layers}
-                onChange={(event) =>
-                  setLayers(
-                    Math.max(0, parseIntegerInput(event.target.value, 0)),
-                  )
-                }
+                onChange={(event) => {
+                  const nextLayers = Math.max(
+                    0,
+                    parseIntegerInput(event.target.value, 0),
+                  );
+                  setLayers(nextLayers);
+                  if (
+                    renderSpiralNumbers &&
+                    isSpiralNumberRenderUnsafeForConfig(nextLayers, canvasSize)
+                  ) {
+                    setRenderSpiralNumbers(false);
+                    setForceSpiralNumberRenderAnyway(false);
+                    setShowSpiralNumberRenderWarning(true);
+                  }
+                }}
                 className="rounded border border-zinc-300 px-2 py-1"
               />
             </label>
@@ -490,6 +661,45 @@ export default function Home() {
               Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
               + 1)^2 - 1
             </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={renderSpiralNumbers}
+                onChange={(event) => {
+                  if (!event.target.checked) {
+                    setRenderSpiralNumbers(false);
+                    setForceSpiralNumberRenderAnyway(false);
+                    setShowSpiralNumberRenderWarning(false);
+                    return;
+                  }
+                  if (isSpiralNumberRenderUnsafe && !forceSpiralNumberRenderAnyway) {
+                    setRenderSpiralNumbers(false);
+                    setShowSpiralNumberRenderWarning(true);
+                    return;
+                  }
+                  setRenderSpiralNumbers(true);
+                  setShowSpiralNumberRenderWarning(false);
+                }}
+              />
+              Render spiral numbers
+            </label>
+            {shouldShowSpiralNumberRenderWarning ? (
+              <p className="text-sm text-amber-700">
+                Spiral number rendering is blocked: text may not be legible
+                and/or rendering the text may freeze the browser.{" "}
+                <button
+                  type="button"
+                  className="underline decoration-dotted underline-offset-2 hover:text-amber-800"
+                  onClick={() => {
+                    setForceSpiralNumberRenderAnyway(true);
+                    setRenderSpiralNumbers(true);
+                    setShowSpiralNumberRenderWarning(false);
+                  }}
+                >
+                  Click here to render anyway.
+                </button>
+              </p>
+            ) : null}
             {isSimulationTooBig ? (
               <p className="text-sm text-amber-700">
                 The spiral size is quite big; this might take a while!
@@ -507,11 +717,21 @@ export default function Home() {
                   min={1}
                   step={1}
                   value={canvasSize}
-                  onChange={(event) =>
-                    setCanvasSize(
-                      Math.max(1, parseIntegerInput(event.target.value, 1)),
-                    )
-                  }
+                  onChange={(event) => {
+                    const nextCanvasSize = Math.max(
+                      1,
+                      parseIntegerInput(event.target.value, 1),
+                    );
+                    setCanvasSize(nextCanvasSize);
+                    if (
+                      renderSpiralNumbers &&
+                      isSpiralNumberRenderUnsafeForConfig(layers, nextCanvasSize)
+                    ) {
+                      setRenderSpiralNumbers(false);
+                      setForceSpiralNumberRenderAnyway(false);
+                      setShowSpiralNumberRenderWarning(true);
+                    }
+                  }}
                   className="rounded border border-zinc-300 px-2 py-1"
                 />
               </label>
