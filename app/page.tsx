@@ -239,6 +239,8 @@ export default function Home() {
   const [players, setPlayers] = useState<EditablePlayer[]>(() => {
     const first = createPresetPlayerDraft([], PLAYER_PRESETS[0]);
     const second = createPresetPlayerDraft([first], PLAYER_PRESETS[0]);
+    first.avoidPlayerIds = [second.id];
+    second.avoidPlayerIds = [first.id];
     return [first, second];
   });
   const [canvasSize, setCanvasSize] = useState(720);
@@ -252,11 +254,7 @@ export default function Home() {
 
   const spiralSize = (2 * layers + 1) ** 2 - 1;
   const cellSize = useMemo(
-    () =>
-      Math.max(
-        1,
-        Math.floor(canvasSize / Math.sqrt(spiralSize)),
-      ),
+    () => Math.max(1, Math.floor(canvasSize / Math.sqrt(spiralSize))),
     [canvasSize, spiralSize],
   );
   const isCellSizeTooSmall = cellSize < MIN_RECOMMENDED_CELL_SIZE;
@@ -409,8 +407,23 @@ export default function Home() {
   return (
     <div className="flex flex-1 bg-zinc-100 p-4 text-zinc-900">
       <main className="mx-auto grid w-full max-w-7xl gap-4 lg:grid-cols-[420px_1fr]">
+        <section className="lg:col-span-2">
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-center text-2xl font-semibold">
+              Sloane&apos;s Knights
+            </h1>
+            <a
+              href="#what-is-this"
+              className="rounded text-sm font-medium leading-none underline decoration-dotted underline-offset-2 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              aria-label="Jump to What is this section"
+            >
+              ?
+            </a>
+          </div>
+        </section>
+
         <section className="space-y-4 rounded-lg border border-zinc-300 bg-white p-4">
-          <h1 className="text-xl font-semibold">Simulation Controls</h1>
+          <h2 className="text-xl font-semibold">Simulation Controls</h2>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
             <h2 className="font-medium">Spiral</h2>
@@ -614,7 +627,16 @@ export default function Home() {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-medium">Move set (x, y)</h4>
+                        <h4 className="flex items-center gap-1 text-sm font-medium">
+                          Move set (dx, dy)
+                          <span
+                            className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
+                            title="A piece placed at (x, y) sees (x + dx, y + dy) for all (dx, dy) in the move set."
+                            aria-label="Move set help"
+                          >
+                            ?
+                          </span>
+                        </h4>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
@@ -737,8 +759,15 @@ export default function Home() {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-medium">
+                        <h4 className="flex items-center gap-1 text-sm font-medium">
                           Enemies to avoid
+                          <span
+                            className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
+                            title="This player cannot place a piece on a cell that is seen by any of its enemies pieces."
+                            aria-label="Enemies to avoid help"
+                          >
+                            ?
+                          </span>
                         </h4>
                         <div className="flex items-center gap-1">
                           <button
@@ -876,6 +905,72 @@ export default function Home() {
             height={canvasSize}
             className="max-w-full border border-zinc-300 bg-white"
           />
+        </section>
+
+        <section
+          id="what-is-this"
+          className="space-y-2 rounded-lg border border-zinc-300 bg-white p-4 lg:col-span-2"
+        >
+          <h2 className="text-lg font-semibold">What is this?</h2>
+          <p className="text-sm text-zinc-700">
+            This is a simulator for (a generalized version of) Sloane&apos;s
+            Knights game as described in{" "}
+            <a
+              href="https://www.youtube.com/watch?v=UiX4CFIiegM"
+              target="_blank"
+              className="text-blue-600 underline decoration-dotted underline-offset-2"
+            >
+              this Numberphile video
+            </a>{" "}
+            and{" "}
+            <a
+              href="https://oeis.org/A392177"
+              target="_blank"
+              className="text-blue-600 underline decoration-dotted underline-offset-2"
+            >
+              this OEIS article
+            </a>
+            .
+          </p>
+
+          <p className="text-sm text-zinc-700">
+            Consider a square spiral with its cells numbered starting at 0. The
+            spiral is centered at the origin, with the center cell being 0 and
+            the spiral expanding outward in a counter-clockwise direction.
+          </p>
+
+          <p className="text-sm text-zinc-700">
+            Each player takes turns placing their pieces on the spiral
+            (represented by their color). Each player places their piece on the
+            lowest available cell in the spiral, where &ldquo;available&rdquo;
+            means the cell is both not already occupied by another player&apos;s
+            piece and is not within a move&apos;s reach of any of the
+            player&apos;s enemies&apos; pieces.
+          </p>
+
+          <p className="text-sm text-zinc-700">
+            The default configuration describes Sloane&apos;s original game: two
+            players, each with a knight piece trying to avoid the other player.
+          </p>
+
+          <p className="text-sm text-zinc-700">
+            In this simulator, you can customize the number of players, their
+            move sets (which cells their pieces threaten), and which players
+            they must avoid.
+          </p>
+
+          <p className="text-sm text-zinc-700">
+            The simulator contains a number of preset player types, that are
+            taken from Jonas Karlsson&apos;s discussion on it{" "}
+            <a
+              href="https://jonka364.github.io/stendhal/stendhal.html"
+              target="_blank"
+              className="text-blue-600 underline decoration-dotted underline-offset-2"
+            >
+              here
+            </a>
+            .
+          </p>
         </section>
       </main>
 
