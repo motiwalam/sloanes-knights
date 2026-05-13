@@ -1016,6 +1016,18 @@ export default function Home() {
             </a>
             .
           </p>
+
+          <p className="text-sm text-zinc-700">
+            Find source code for this website{" "}
+            <a
+              href="https://github.com/motiwalam/sloanes-knights"
+              target="_blank"
+              className="text-blue-600 underline decoration-dotted underline-offset-2"
+            >
+              here
+            </a>
+            .
+          </p>
         </section>
       </main>
 
