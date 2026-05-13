@@ -37,6 +37,7 @@ const DEFAULT_COLORS = [
   "#a855f7",
   "#06b6d4",
 ];
+const MIN_RECOMMENDED_CELL_SIZE = 1;
 
 let playerIdCounter = 1;
 
@@ -242,7 +243,6 @@ export default function Home() {
   });
   const [canvasWidth, setCanvasWidth] = useState(720);
   const [canvasHeight, setCanvasHeight] = useState(720);
-  const [cellSize, setCellSize] = useState(8);
   const [pixels, setPixels] = useState<Pixel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [bulkMoveModalPlayerId, setBulkMoveModalPlayerId] = useState<
@@ -251,7 +251,16 @@ export default function Home() {
   const [bulkMoveInput, setBulkMoveInput] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const spiralSize = (2 * layers + 1) ** 2;
+  const spiralSize = (2 * layers + 1) ** 2 - 1;
+  const cellSize = useMemo(
+    () =>
+      Math.max(
+        1,
+        Math.floor(Math.min(canvasWidth, canvasHeight) / Math.sqrt(spiralSize)),
+      ),
+    [canvasWidth, canvasHeight, spiralSize],
+  );
+  const isCellSizeTooSmall = cellSize < MIN_RECOMMENDED_CELL_SIZE;
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
   const bulkMoveParse = useMemo(
@@ -356,9 +365,6 @@ export default function Home() {
       if (!Number.isInteger(layers) || layers < 0) {
         throw new Error("Layers must be a non-negative integer.");
       }
-      if (!Number.isInteger(cellSize) || cellSize <= 0) {
-        throw new Error("Cell size must be a positive integer.");
-      }
       if (!Number.isInteger(canvasWidth) || canvasWidth <= 0) {
         throw new Error("Canvas width must be a positive integer.");
       }
@@ -429,13 +435,13 @@ export default function Home() {
             </label>
             <p className="text-sm text-zinc-600">
               Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
-              + 1)^2
+              + 1)^2 - 1
             </p>
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
             <h2 className="font-medium">Canvas</h2>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <label className="flex flex-col gap-1 text-sm">
                 Width
                 <input
@@ -466,22 +472,17 @@ export default function Home() {
                   className="rounded border border-zinc-300 px-2 py-1"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm">
-                Cell
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={cellSize}
-                  onChange={(event) =>
-                    setCellSize(
-                      Math.max(1, parseIntegerInput(event.target.value, 1)),
-                    )
-                  }
-                  className="rounded border border-zinc-300 px-2 py-1"
-                />
-              </label>
             </div>
+            <p className="text-sm text-zinc-600">
+              Computed cell size:{" "}
+              <span className="font-mono">{cellSize}px</span>
+            </p>
+            {isCellSizeTooSmall ? (
+              <p className="text-sm text-amber-700">
+                The computed cell size is very small ({cellSize}px). Increase
+                the canvas width or height to keep the spiral visible.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
