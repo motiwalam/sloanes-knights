@@ -1,6 +1,6 @@
 [
   {
-    "name": "Knight",
+    "name": "Knight @(2, 1)",
     "moveSet": [
       [2, 1],
       [2, -1],
@@ -13,7 +13,7 @@
     ]
   },
   {
-    "name": "Fers",
+    "name": "Fers @(1, 1)",
     "moveSet": [
       [1, 1],
       [-1, 1],
@@ -22,7 +22,7 @@
     ]
   },
   {
-    "name": "Vazir",
+    "name": "Vazir @(1, 0)",
     "moveSet": [
       [1, 0],
       [-1, 0],
@@ -31,7 +31,7 @@
     ]
   },
   {
-    "name": "Camel",
+    "name": "Camel @(3, 1)",
     "moveSet": [
       [3, 1],
       [-3, 1],
@@ -44,7 +44,7 @@
     ]
   },
   {
-    "name": "Zebra",
+    "name": "Zebra @(3, 2)",
     "moveSet": [
       [3, 2],
       [-3, 2],
@@ -57,7 +57,7 @@
     ]
   },
   {
-    "name": "Antelope",
+    "name": "Antelope @(4, 3)",
     "moveSet": [
       [4, 3],
       [-4, 3],
@@ -70,7 +70,7 @@
     ]
   },
   {
-    "name": "Eland",
+    "name": "Eland @(5, 3)",
     "moveSet": [
       [5, 3],
       [-5, 3],
@@ -83,7 +83,7 @@
     ]
   },
   {
-    "name": "Satrap",
+    "name": "Satrap @(2, 0)",
     "moveSet": [
       [2, 0],
       [0, 2],
@@ -92,7 +92,7 @@
     ]
   },
   {
-    "name": "Aspbad",
+    "name": "Aspbad @(2, 2)",
     "moveSet": [
       [2, 2],
       [-2, 2],
@@ -101,7 +101,7 @@
     ]
   },
   {
-    "name": "Spehbed",
+    "name": "Spehbed @(3, 0)",
     "moveSet": [
       [3, 0],
       [0, 3],
@@ -110,7 +110,7 @@
     ]
   },
   {
-    "name": "Marzban",
+    "name": "Marzban @(3, 3)",
     "moveSet": [
       [3, 3],
       [-3, 3],
