@@ -850,36 +850,39 @@ export default function Home() {
           <h2 className="text-xl font-semibold">Simulation Controls</h2>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <h2 className="font-medium">Spiral</h2>
-            <label className="flex flex-col gap-1 text-sm">
-              Layers (k)
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={layers}
-                onChange={(event) => {
-                  const nextLayers = Math.max(
-                    0,
-                    parseIntegerInput(event.target.value, 0),
-                  );
-                  setLayers(nextLayers);
-                  if (
-                    renderSpiralNumbers &&
-                    isSpiralNumberRenderUnsafeForConfig(nextLayers, canvasSize)
-                  ) {
-                    setRenderSpiralOptions(false, false);
-                    setShowSpiralNumberRenderWarning(true);
-                  }
-                }}
-                className="rounded border border-zinc-300 px-2 py-1"
-              />
-            </label>
-            <p className="text-sm text-zinc-600">
-              Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
-              + 1)^2 - 1
-            </p>
-            <label className="flex items-center gap-2 text-sm">
+            <h2 className="font-bold">Spiral settings</h2>
+            <div className="space-y-1">
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span>Layers (k)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={layers}
+                  onChange={(event) => {
+                    const nextLayers = Math.max(
+                      0,
+                      parseIntegerInput(event.target.value, 0),
+                    );
+                    setLayers(nextLayers);
+                    if (
+                      renderSpiralNumbers &&
+                      isSpiralNumberRenderUnsafeForConfig(nextLayers, canvasSize)
+                    ) {
+                      setRenderSpiralOptions(false, false);
+                      setShowSpiralNumberRenderWarning(true);
+                    }
+                  }}
+                  className="w-24 rounded border border-zinc-300 px-2 py-1"
+                />
+              </label>
+              <p className="text-sm text-zinc-600">
+                Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
+                + 1)^2 - 1
+              </p>
+            </div>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Render spiral numbers</span>
               <input
                 type="checkbox"
                 checked={renderSpiralNumbers}
@@ -901,7 +904,6 @@ export default function Home() {
                   setShowSpiralNumberRenderWarning(false);
                 }}
               />
-              Render spiral numbers
             </label>
             {shouldShowSpiralNumberRenderWarning ? (
               <p className="text-sm text-amber-700">
@@ -928,51 +930,64 @@ export default function Home() {
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <h2 className="font-medium">Canvas</h2>
+            <h2 className="font-bold">Canvas settings</h2>
             <div className="grid grid-cols-1 gap-2">
-              <label className="flex flex-col gap-1 text-sm">
-                Canvas size
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={canvasSize}
-                  onChange={(event) => {
-                    const nextCanvasSize = Math.max(
-                      1,
-                      parseIntegerInput(event.target.value, 1),
-                    );
-                    setCanvasSize(nextCanvasSize);
-                    if (
-                      renderSpiralNumbers &&
-                      isSpiralNumberRenderUnsafeForConfig(
-                        layers,
-                        nextCanvasSize,
-                      )
-                    ) {
-                      setRenderSpiralOptions(false, false);
-                      setShowSpiralNumberRenderWarning(true);
-                    }
-                  }}
-                  className="rounded border border-zinc-300 px-2 py-1"
-                />
-              </label>
+              <div className="space-y-1">
+                <label className="flex items-center justify-between gap-3 text-sm">
+                  <span>Canvas size</span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={canvasSize}
+                    onChange={(event) => {
+                      const nextCanvasSize = Math.max(
+                        1,
+                        parseIntegerInput(event.target.value, 1),
+                      );
+                      setCanvasSize(nextCanvasSize);
+                      if (
+                        renderSpiralNumbers &&
+                        isSpiralNumberRenderUnsafeForConfig(
+                          layers,
+                          nextCanvasSize,
+                        )
+                      ) {
+                        setRenderSpiralOptions(false, false);
+                        setShowSpiralNumberRenderWarning(true);
+                      }
+                    }}
+                    className="w-24 rounded border border-zinc-300 px-2 py-1"
+                  />
+                </label>
+                <p className="text-sm text-zinc-600">
+                  Computed cell size:{" "}
+                  <span className="font-mono">{cellSize}px</span>
+                </p>
+              </div>
+              {isCanvasTooSmall ? (
+                <p className="text-sm text-amber-700">
+                  The canvas size may be too small to render the entire spiral.
+                </p>
+              ) : null}
             </div>
-            <p className="text-sm text-zinc-600">
-              Computed cell size:{" "}
-              <span className="font-mono">{cellSize}px</span>
-            </p>
-            {isCanvasTooSmall ? (
-              <p className="text-sm text-amber-700">
-                The canvas size may be too small to render the entire spiral.
-              </p>
-            ) : null}
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-medium">Players</h2>
-              <div className="flex items-center gap-1">
+            <h2 className="font-bold">Player settings</h2>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm">Add players</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPlayers((prev) => [...prev, createPlayerDraft(prev)])
+                  }
+                  className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
+                >
+                  Blank
+                </button>
+                <span className="text-xs font-medium text-zinc-500">OR</span>
                 <select
                   value=""
                   onChange={(event) => {
@@ -991,7 +1006,7 @@ export default function Home() {
                   className="max-w-32 rounded border border-zinc-300 px-2 py-1 text-sm disabled:bg-zinc-100"
                 >
                   <option value="" disabled>
-                    Add preset
+                    Choose preset
                   </option>
                   {PLAYER_PRESETS.map((preset) => (
                     <option key={preset.name} value={preset.name}>
@@ -999,15 +1014,6 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPlayers((prev) => [...prev, createPlayerDraft(prev)])
-                  }
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
-                >
-                  Add blank player
-                </button>
               </div>
             </div>
             <div className="space-y-3">
