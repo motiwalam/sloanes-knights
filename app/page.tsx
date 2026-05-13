@@ -466,6 +466,7 @@ export default function Home() {
     isSpiralNumberRenderUnsafe &&
     !renderSpiralNumbers;
   const hasAnimationConfigChanges =
+    hasUnrenderedConfigChanges ||
     animationConfigSignature !== null &&
     animationConfigSignature !== currentSimulationConfigSignature;
   const shouldShowAnimationControls =
@@ -473,6 +474,10 @@ export default function Home() {
     isAnimationStarted &&
     !isAnimationComplete &&
     !hasAnimationConfigChanges;
+  const pixelsToRender = useMemo(
+    () => (hasUnrenderedConfigChanges ? [] : renderedPixels),
+    [hasUnrenderedConfigChanges, renderedPixels],
+  );
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
   const bulkMoveParse = useMemo(
@@ -539,14 +544,14 @@ export default function Home() {
       previousDrawState.cellSize !== renderedCellSize ||
       previousDrawState.spiralSize !== renderedSpiralSize ||
       previousDrawState.shouldRenderSpiralNumbers !== shouldRenderSpiralNumbers ||
-      renderedPixels.length < previousDrawState.pixelCount;
+      pixelsToRender.length < previousDrawState.pixelCount;
 
     if (needsFullRerender) {
       context.clearRect(0, 0, renderedCanvasSize, renderedCanvasSize);
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, renderedCanvasSize, renderedCanvasSize);
 
-      for (const pixel of renderedPixels) {
+      for (const pixel of pixelsToRender) {
         const drawX = Math.round(
           originX + pixel.position.x * renderedCellSize - renderedCellSize / 2,
         );
@@ -559,7 +564,7 @@ export default function Home() {
 
       if (shouldRenderSpiralNumbers) {
         const pixelColorsByPosition = new Map<string, string>();
-        for (const pixel of renderedPixels) {
+        for (const pixel of pixelsToRender) {
           pixelColorsByPosition.set(
             `${pixel.position.x},${pixel.position.y}`,
             pixel.color,
@@ -589,7 +594,7 @@ export default function Home() {
         }
       }
     } else {
-      const newPixels = renderedPixels.slice(previousDrawState.pixelCount);
+      const newPixels = pixelsToRender.slice(previousDrawState.pixelCount);
       for (const pixel of newPixels) {
         drawPixel(pixel);
       }
@@ -600,11 +605,12 @@ export default function Home() {
       cellSize: renderedCellSize,
       spiralSize: renderedSpiralSize,
       shouldRenderSpiralNumbers,
-      pixelCount: renderedPixels.length,
+      pixelCount: pixelsToRender.length,
     };
   }, [
+    hasUnrenderedConfigChanges,
     shouldRenderSpiralNumbers,
-    renderedPixels,
+    pixelsToRender,
     renderedCanvasSize,
     renderedCellSize,
     renderedSpiralSize,
@@ -683,22 +689,6 @@ export default function Home() {
   ) {
     setRenderSpiralNumbers(nextRenderSpiralNumbers);
     setForceSpiralNumberRenderAnyway(nextForceRenderAnyway);
-
-    if (!animationMode || !isAnimationStarted || hasAnimationConfigChanges) {
-      return;
-    }
-
-    setRenderedRenderSpiralNumbers(nextRenderSpiralNumbers);
-    setRenderedForceSpiralNumberRenderAnyway(nextForceRenderAnyway);
-    setRenderedConfigSignature(
-      getConfigurationSignature({
-        layers,
-        canvasSize,
-        players,
-        renderSpiralNumbers: nextRenderSpiralNumbers,
-        forceSpiralNumberRenderAnyway: nextForceRenderAnyway,
-      }),
-    );
   }
 
   function runSimulation() {
@@ -740,7 +730,7 @@ export default function Home() {
 
   function stepAnimationSimulation(stepCount: number) {
     const simulation = animationSimulationRef.current;
-    if (!simulation || isAnimationComplete || hasAnimationConfigChanges) {
+    if (!simulation || isAnimationComplete || hasUnrenderedConfigChanges) {
       return;
     }
 
@@ -770,7 +760,7 @@ export default function Home() {
 
   function runAnimationUntilCompletion() {
     const simulation = animationSimulationRef.current;
-    if (!simulation || isAnimationComplete || hasAnimationConfigChanges) {
+    if (!simulation || isAnimationComplete || hasUnrenderedConfigChanges) {
       return;
     }
 
@@ -1459,7 +1449,7 @@ export default function Home() {
           !isAnimationComplete &&
           hasAnimationConfigChanges ? (
             <p className="mt-4 text-sm text-amber-700">
-              Animation controls are hidden because simulation settings changed.
+              Animation controls are hidden because configuration changed.
               Click Start simulation to reinitialize.
             </p>
           ) : null}
