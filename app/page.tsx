@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createSimulation,
   getPixels,
+  stepSimulation,
   spiralToGrid,
   type Player,
+  type Simulation,
   type Vec2d,
 } from "@/lib/simulation";
 
@@ -239,7 +241,7 @@ function parseBulkMoveInput(input: string): {
   };
 }
 
-type Pixel = { color: string; position: Vec2d };
+type Pixel = { color: string; position: Vec2d; spiralIndex: number };
 
 function computeCellSize(canvasSize: number, layers: number): number {
   return Math.max(1, Math.floor(canvasSize / (2 * layers + 1)));
@@ -335,6 +337,24 @@ function getConfigurationSignature(config: {
   });
 }
 
+function getSimulationConfigurationSignature(config: {
+  layers: number;
+  canvasSize: number;
+  players: EditablePlayer[];
+}): string {
+  return JSON.stringify({
+    layers: config.layers,
+    canvasSize: config.canvasSize,
+    players: config.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      moveSet: player.moveSet,
+      avoidPlayerIds: player.avoidPlayerIds,
+    })),
+  });
+}
+
 export default function Home() {
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [players, setPlayers] =
@@ -360,11 +380,26 @@ export default function Home() {
     string | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [animationMode, setAnimationMode] = useState(false);
+  const [isAnimationStarted, setIsAnimationStarted] = useState(false);
+  const [isAnimationComplete, setIsAnimationComplete] = useState(false);
+  const [animationConfigSignature, setAnimationConfigSignature] = useState<
+    string | null
+  >(null);
+  const [animationStepCount, setAnimationStepCount] = useState("10");
   const [bulkMoveModalPlayerId, setBulkMoveModalPlayerId] = useState<
     string | null
   >(null);
   const [bulkMoveInput, setBulkMoveInput] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationSimulationRef = useRef<Simulation | null>(null);
+  const previousDrawStateRef = useRef<{
+    canvasSize: number;
+    cellSize: number;
+    spiralSize: number;
+    shouldRenderSpiralNumbers: boolean;
+    pixelCount: number;
+  } | null>(null);
 
   const spiralSize = (2 * layers + 1) ** 2 - 1;
   const isSimulationTooBig = spiralSize > MAX_SPIRAL_SIZE;
@@ -388,6 +423,15 @@ export default function Home() {
       renderSpiralNumbers,
       forceSpiralNumberRenderAnyway,
     ],
+  );
+  const currentSimulationConfigSignature = useMemo(
+    () =>
+      getSimulationConfigurationSignature({
+        layers,
+        canvasSize,
+        players,
+      }),
+    [layers, canvasSize, players],
   );
   const hasUnrenderedConfigChanges =
     renderedConfigSignature !== null &&
@@ -421,6 +465,14 @@ export default function Home() {
     showSpiralNumberRenderWarning &&
     isSpiralNumberRenderUnsafe &&
     !renderSpiralNumbers;
+  const hasAnimationConfigChanges =
+    animationConfigSignature !== null &&
+    animationConfigSignature !== currentSimulationConfigSignature;
+  const shouldShowAnimationControls =
+    animationMode &&
+    isAnimationStarted &&
+    !isAnimationComplete &&
+    !hasAnimationConfigChanges;
   const bulkMoveTargetPlayer =
     players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
   const bulkMoveParse = useMemo(
@@ -453,14 +505,10 @@ export default function Home() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.clearRect(0, 0, renderedCanvasSize, renderedCanvasSize);
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, renderedCanvasSize, renderedCanvasSize);
-
     const originX = renderedCanvasSize / 2;
     const originY = renderedCanvasSize / 2;
 
-    for (const pixel of renderedPixels) {
+    const drawPixel = (pixel: Pixel) => {
       const drawX = Math.round(
         originX + pixel.position.x * renderedCellSize - renderedCellSize / 2,
       );
@@ -469,39 +517,91 @@ export default function Home() {
       );
       context.fillStyle = pixel.color;
       context.fillRect(drawX, drawY, renderedCellSize, renderedCellSize);
-    }
 
-    if (shouldRenderSpiralNumbers) {
-      const pixelColorsByPosition = new Map<string, string>();
-      for (const pixel of renderedPixels) {
-        pixelColorsByPosition.set(
-          `${pixel.position.x},${pixel.position.y}`,
-          pixel.color,
-        );
+      if (!shouldRenderSpiralNumbers) {
+        return;
       }
-
       context.font = `${renderedSpiralNumberFontSize}px sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
+      context.fillStyle = getContrastTextColor(pixel.color);
+      context.fillText(
+        String(pixel.spiralIndex),
+        drawX + renderedCellSize / 2,
+        drawY + renderedCellSize / 2,
+      );
+    };
 
-      for (let n = 0; n <= renderedSpiralSize; n += 1) {
-        const grid = spiralToGrid(n);
+    const previousDrawState = previousDrawStateRef.current;
+    const needsFullRerender =
+      !previousDrawState ||
+      previousDrawState.canvasSize !== renderedCanvasSize ||
+      previousDrawState.cellSize !== renderedCellSize ||
+      previousDrawState.spiralSize !== renderedSpiralSize ||
+      previousDrawState.shouldRenderSpiralNumbers !== shouldRenderSpiralNumbers ||
+      renderedPixels.length < previousDrawState.pixelCount;
+
+    if (needsFullRerender) {
+      context.clearRect(0, 0, renderedCanvasSize, renderedCanvasSize);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, renderedCanvasSize, renderedCanvasSize);
+
+      for (const pixel of renderedPixels) {
         const drawX = Math.round(
-          originX + grid.x * renderedCellSize - renderedCellSize / 2,
+          originX + pixel.position.x * renderedCellSize - renderedCellSize / 2,
         );
         const drawY = Math.round(
-          originY - grid.y * renderedCellSize - renderedCellSize / 2,
+          originY - pixel.position.y * renderedCellSize - renderedCellSize / 2,
         );
-        const backgroundColor =
-          pixelColorsByPosition.get(`${grid.x},${grid.y}`) ?? "#ffffff";
-        context.fillStyle = getContrastTextColor(backgroundColor);
-        context.fillText(
-          String(n),
-          drawX + renderedCellSize / 2,
-          drawY + renderedCellSize / 2,
-        );
+        context.fillStyle = pixel.color;
+        context.fillRect(drawX, drawY, renderedCellSize, renderedCellSize);
+      }
+
+      if (shouldRenderSpiralNumbers) {
+        const pixelColorsByPosition = new Map<string, string>();
+        for (const pixel of renderedPixels) {
+          pixelColorsByPosition.set(
+            `${pixel.position.x},${pixel.position.y}`,
+            pixel.color,
+          );
+        }
+
+        context.font = `${renderedSpiralNumberFontSize}px sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        for (let n = 0; n <= renderedSpiralSize; n += 1) {
+          const grid = spiralToGrid(n);
+          const drawX = Math.round(
+            originX + grid.x * renderedCellSize - renderedCellSize / 2,
+          );
+          const drawY = Math.round(
+            originY - grid.y * renderedCellSize - renderedCellSize / 2,
+          );
+          const backgroundColor =
+            pixelColorsByPosition.get(`${grid.x},${grid.y}`) ?? "#ffffff";
+          context.fillStyle = getContrastTextColor(backgroundColor);
+          context.fillText(
+            String(n),
+            drawX + renderedCellSize / 2,
+            drawY + renderedCellSize / 2,
+          );
+        }
+      }
+    } else {
+      const newPixels = renderedPixels.slice(previousDrawState.pixelCount);
+      for (const pixel of newPixels) {
+        drawPixel(pixel);
       }
     }
+
+    previousDrawStateRef.current = {
+      canvasSize: renderedCanvasSize,
+      cellSize: renderedCellSize,
+      spiralSize: renderedSpiralSize,
+      shouldRenderSpiralNumbers,
+      pixelCount: renderedPixels.length,
+    };
   }, [
     shouldRenderSpiralNumbers,
     renderedPixels,
@@ -556,33 +656,142 @@ export default function Home() {
     });
   }
 
+  function validateSimulationInputs() {
+    if (players.length === 0) {
+      throw new Error("Add at least one player.");
+    }
+    if (!Number.isInteger(layers) || layers < 0) {
+      throw new Error("Layers must be a non-negative integer.");
+    }
+    if (!Number.isInteger(canvasSize) || canvasSize <= 0) {
+      throw new Error("Canvas size must be a positive integer.");
+    }
+  }
+
+  function syncRenderedConfig() {
+    setRenderedCanvasSize(canvasSize);
+    setRenderedSpiralSize(spiralSize);
+    setRenderedCellSize(cellSize);
+    setRenderedRenderSpiralNumbers(renderSpiralNumbers);
+    setRenderedForceSpiralNumberRenderAnyway(forceSpiralNumberRenderAnyway);
+    setRenderedConfigSignature(currentConfigSignature);
+  }
+
+  function setRenderSpiralOptions(
+    nextRenderSpiralNumbers: boolean,
+    nextForceRenderAnyway: boolean,
+  ) {
+    setRenderSpiralNumbers(nextRenderSpiralNumbers);
+    setForceSpiralNumberRenderAnyway(nextForceRenderAnyway);
+
+    if (!animationMode || !isAnimationStarted || hasAnimationConfigChanges) {
+      return;
+    }
+
+    setRenderedRenderSpiralNumbers(nextRenderSpiralNumbers);
+    setRenderedForceSpiralNumberRenderAnyway(nextForceRenderAnyway);
+    setRenderedConfigSignature(
+      getConfigurationSignature({
+        layers,
+        canvasSize,
+        players,
+        renderSpiralNumbers: nextRenderSpiralNumbers,
+        forceSpiralNumberRenderAnyway: nextForceRenderAnyway,
+      }),
+    );
+  }
+
   function runSimulation() {
     try {
-      if (players.length === 0) {
-        throw new Error("Add at least one player.");
-      }
-      if (!Number.isInteger(layers) || layers < 0) {
-        throw new Error("Layers must be a non-negative integer.");
-      }
-      if (!Number.isInteger(canvasSize) || canvasSize <= 0) {
-        throw new Error("Canvas size must be a positive integer.");
-      }
+      validateSimulationInputs();
       const simulationPlayers = buildSimulationPlayers();
-      console.log("running simulation with", spiralSize, simulationPlayers);
       const simulation = createSimulation(spiralSize, simulationPlayers);
+      animationSimulationRef.current = null;
+      setIsAnimationStarted(false);
+      setIsAnimationComplete(false);
+      setAnimationConfigSignature(null);
       setRenderedPixels(getPixels(simulation));
-      setRenderedCanvasSize(canvasSize);
-      setRenderedSpiralSize(spiralSize);
-      setRenderedCellSize(cellSize);
-      setRenderedRenderSpiralNumbers(renderSpiralNumbers);
-      setRenderedForceSpiralNumberRenderAnyway(forceSpiralNumberRenderAnyway);
-      setRenderedConfigSignature(currentConfigSignature);
+      syncRenderedConfig();
       setError(null);
     } catch (caught) {
       const message =
         caught instanceof Error ? caught.message : "Unknown error.";
       setError(message);
     }
+  }
+
+  function startAnimationSimulation() {
+    try {
+      validateSimulationInputs();
+      const simulationPlayers = buildSimulationPlayers();
+      animationSimulationRef.current = createSimulation(spiralSize, simulationPlayers);
+      setIsAnimationStarted(true);
+      setIsAnimationComplete(false);
+      setAnimationConfigSignature(currentSimulationConfigSignature);
+      setRenderedPixels([]);
+      syncRenderedConfig();
+      setError(null);
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unknown error.";
+      setError(message);
+    }
+  }
+
+  function stepAnimationSimulation(stepCount: number) {
+    const simulation = animationSimulationRef.current;
+    if (!simulation || isAnimationComplete || hasAnimationConfigChanges) {
+      return;
+    }
+
+    const newPixels: Pixel[] = [];
+    let completed = false;
+    for (let i = 0; i < stepCount; i += 1) {
+      completed = stepSimulation(simulation);
+      if (completed) {
+        break;
+      }
+      const latestPiece = simulation._currentPieces[simulation._currentPieces.length - 1];
+      newPixels.push({
+        color: simulation.players[latestPiece.playerId].color,
+        position: spiralToGrid(latestPiece.position),
+        spiralIndex: latestPiece.position,
+      });
+    }
+
+    if (newPixels.length > 0) {
+      setRenderedPixels((prev) => [...prev, ...newPixels]);
+    }
+
+    if (completed) {
+      setIsAnimationComplete(true);
+    }
+  }
+
+  function runAnimationUntilCompletion() {
+    const simulation = animationSimulationRef.current;
+    if (!simulation || isAnimationComplete || hasAnimationConfigChanges) {
+      return;
+    }
+
+    const newPixels: Pixel[] = [];
+    while (true) {
+      const completed = stepSimulation(simulation);
+      if (completed) {
+        break;
+      }
+      const latestPiece = simulation._currentPieces[simulation._currentPieces.length - 1];
+      newPixels.push({
+        color: simulation.players[latestPiece.playerId].color,
+        position: spiralToGrid(latestPiece.position),
+        spiralIndex: latestPiece.position,
+      });
+    }
+
+    if (newPixels.length > 0) {
+      setRenderedPixels((prev) => [...prev, ...newPixels]);
+    }
+    setIsAnimationComplete(true);
   }
 
   function closeBulkMoveModal() {
@@ -649,8 +858,7 @@ export default function Home() {
                     renderSpiralNumbers &&
                     isSpiralNumberRenderUnsafeForConfig(nextLayers, canvasSize)
                   ) {
-                    setRenderSpiralNumbers(false);
-                    setForceSpiralNumberRenderAnyway(false);
+                    setRenderSpiralOptions(false, false);
                     setShowSpiralNumberRenderWarning(true);
                   }
                 }}
@@ -667,17 +875,16 @@ export default function Home() {
                 checked={renderSpiralNumbers}
                 onChange={(event) => {
                   if (!event.target.checked) {
-                    setRenderSpiralNumbers(false);
-                    setForceSpiralNumberRenderAnyway(false);
+                    setRenderSpiralOptions(false, false);
                     setShowSpiralNumberRenderWarning(false);
                     return;
                   }
                   if (isSpiralNumberRenderUnsafe && !forceSpiralNumberRenderAnyway) {
-                    setRenderSpiralNumbers(false);
+                    setRenderSpiralOptions(false, false);
                     setShowSpiralNumberRenderWarning(true);
                     return;
                   }
-                  setRenderSpiralNumbers(true);
+                  setRenderSpiralOptions(true, forceSpiralNumberRenderAnyway);
                   setShowSpiralNumberRenderWarning(false);
                 }}
               />
@@ -691,8 +898,7 @@ export default function Home() {
                   type="button"
                   className="underline decoration-dotted underline-offset-2 hover:text-amber-800"
                   onClick={() => {
-                    setForceSpiralNumberRenderAnyway(true);
-                    setRenderSpiralNumbers(true);
+                    setRenderSpiralOptions(true, true);
                     setShowSpiralNumberRenderWarning(false);
                   }}
                 >
@@ -727,8 +933,7 @@ export default function Home() {
                       renderSpiralNumbers &&
                       isSpiralNumberRenderUnsafeForConfig(layers, nextCanvasSize)
                     ) {
-                      setRenderSpiralNumbers(false);
-                      setForceSpiralNumberRenderAnyway(false);
+                      setRenderSpiralOptions(false, false);
                       setShowSpiralNumberRenderWarning(true);
                     }
                   }}
@@ -1155,13 +1360,32 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={runSimulation}
-            className="rounded bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            Run simulation
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={animationMode ? startAnimationSimulation : runSimulation}
+              className="rounded bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              {animationMode ? "Start simulation" : "Run simulation"}
+            </button>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={animationMode}
+                onChange={(event) => {
+                  const nextAnimationMode = event.target.checked;
+                  setAnimationMode(nextAnimationMode);
+                  if (!nextAnimationMode) {
+                    animationSimulationRef.current = null;
+                    setIsAnimationStarted(false);
+                    setIsAnimationComplete(false);
+                    setAnimationConfigSignature(null);
+                  }
+                }}
+              />
+              Animation mode
+            </label>
+          </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </section>
 
@@ -1177,6 +1401,68 @@ export default function Home() {
                 : "border-zinc-300"
             }`}
           />
+          {shouldShowAnimationControls ? (
+            <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+                <div className="sm:justify-self-start">
+                  <button
+                    type="button"
+                    onClick={() => stepAnimationSimulation(1)}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                  >
+                    Step +1
+                  </button>
+                </div>
+                <div className="flex items-end justify-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={animationStepCount}
+                    onChange={(event) => setAnimationStepCount(event.target.value)}
+                    className="w-24 rounded border border-zinc-300 px-2 py-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsedStepCount = Math.max(
+                        1,
+                        parseIntegerInput(animationStepCount, 10),
+                      );
+                      setAnimationStepCount(String(parsedStepCount));
+                      stepAnimationSimulation(parsedStepCount);
+                    }}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                  >
+                    Step +N
+                  </button>
+                </div>
+                <div className="sm:justify-self-end">
+                  <button
+                    type="button"
+                    onClick={runAnimationUntilCompletion}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                  >
+                    Run until completion
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {animationMode && isAnimationStarted && isAnimationComplete ? (
+            <p className="mt-4 text-sm text-amber-700">
+              Simulation complete. Click Start simulation to initialize a new run.
+            </p>
+          ) : null}
+          {animationMode &&
+          isAnimationStarted &&
+          !isAnimationComplete &&
+          hasAnimationConfigChanges ? (
+            <p className="mt-4 text-sm text-amber-700">
+              Animation controls are hidden because simulation settings changed.
+              Click Start simulation to reinitialize.
+            </p>
+          ) : null}
         </section>
 
         <section

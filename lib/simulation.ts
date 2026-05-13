@@ -105,12 +105,13 @@ function stepSimulation(simulation: Simulation): boolean {
 
 function getPixels(
   simulation: Simulation,
-): { color: string; position: Vec2d }[] {
+): { color: string; position: Vec2d; spiralIndex: number }[] {
   // simulate until the end, then return the current pieces
   while (!stepSimulation(simulation));
   return simulation._currentPieces.map((piece) => ({
     color: simulation.players[piece.playerId].color,
     position: spiralToGrid(piece.position),
+    spiralIndex: piece.position,
   }));
 }
 
@@ -153,4 +154,4 @@ function gridToSpiral(gridPos: Vec2d): number {
 }
 
 export type { MoveSet, Player, Simulation, Vec2d };
-export { createSimulation, getPixels, spiralToGrid };
+export { createSimulation, getPixels, spiralToGrid, stepSimulation };
