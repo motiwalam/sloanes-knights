@@ -30,8 +30,9 @@ type MoveCoordinates = {
 };
 
 const DEFAULT_COLORS = [
-  "#f43f5e",
-  "#3b82f6",
+  "#000000",
+  "#a51d2d",
+  "#99c1f1",
   "#10b981",
   "#f59e0b",
   "#a855f7",
