@@ -251,7 +251,10 @@ function countDigits(value: number): number {
   return Math.abs(value).toString().length;
 }
 
-function computeSpiralNumberFontSize(cellSize: number, spiralSize: number): number {
+function computeSpiralNumberFontSize(
+  cellSize: number,
+  spiralSize: number,
+): number {
   return Math.max(1, Math.floor(cellSize / countDigits(spiralSize)));
 }
 
@@ -261,7 +264,10 @@ function isSpiralNumberRenderUnsafeForConfig(
 ): boolean {
   const spiralSize = (2 * layers + 1) ** 2 - 1;
   const cellSize = computeCellSize(canvasSize, layers);
-  const spiralNumberFontSize = computeSpiralNumberFontSize(cellSize, spiralSize);
+  const spiralNumberFontSize = computeSpiralNumberFontSize(
+    cellSize,
+    spiralSize,
+  );
   return (
     spiralNumberFontSize < MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE ||
     spiralSize > MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE
@@ -275,7 +281,9 @@ function expandShortHex(hex: string): string {
     .join("");
 }
 
-function parseHexColor(color: string): { r: number; g: number; b: number } | null {
+function parseHexColor(
+  color: string,
+): { r: number; g: number; b: number } | null {
   const normalized = color.trim();
   const shortMatch = /^#([0-9a-fA-F]{3})$/.exec(normalized);
   const longMatch = /^#([0-9a-fA-F]{6})$/.exec(normalized);
@@ -375,7 +383,10 @@ export default function Home() {
     useState(false);
   const [renderedRenderSpiralNumbers, setRenderedRenderSpiralNumbers] =
     useState(false);
-  const [renderedForceSpiralNumberRenderAnyway, setRenderedForceSpiralNumberRenderAnyway] = useState(false);
+  const [
+    renderedForceSpiralNumberRenderAnyway,
+    setRenderedForceSpiralNumberRenderAnyway,
+  ] = useState(false);
   const [renderedConfigSignature, setRenderedConfigSignature] = useState<
     string | null
   >(null);
@@ -467,8 +478,8 @@ export default function Home() {
     !renderSpiralNumbers;
   const hasAnimationConfigChanges =
     hasUnrenderedConfigChanges ||
-    animationConfigSignature !== null &&
-    animationConfigSignature !== currentSimulationConfigSignature;
+    (animationConfigSignature !== null &&
+      animationConfigSignature !== currentSimulationConfigSignature);
   const shouldShowAnimationControls =
     animationMode &&
     isAnimationStarted &&
@@ -543,7 +554,8 @@ export default function Home() {
       previousDrawState.canvasSize !== renderedCanvasSize ||
       previousDrawState.cellSize !== renderedCellSize ||
       previousDrawState.spiralSize !== renderedSpiralSize ||
-      previousDrawState.shouldRenderSpiralNumbers !== shouldRenderSpiralNumbers ||
+      previousDrawState.shouldRenderSpiralNumbers !==
+        shouldRenderSpiralNumbers ||
       pixelsToRender.length < previousDrawState.pixelCount;
 
     if (needsFullRerender) {
@@ -714,7 +726,10 @@ export default function Home() {
     try {
       validateSimulationInputs();
       const simulationPlayers = buildSimulationPlayers();
-      animationSimulationRef.current = createSimulation(spiralSize, simulationPlayers);
+      animationSimulationRef.current = createSimulation(
+        spiralSize,
+        simulationPlayers,
+      );
       setIsAnimationStarted(true);
       setIsAnimationComplete(false);
       setAnimationConfigSignature(currentSimulationConfigSignature);
@@ -741,7 +756,8 @@ export default function Home() {
       if (completed) {
         break;
       }
-      const latestPiece = simulation._currentPieces[simulation._currentPieces.length - 1];
+      const latestPiece =
+        simulation._currentPieces[simulation._currentPieces.length - 1];
       newPixels.push({
         color: simulation.players[latestPiece.playerId].color,
         position: spiralToGrid(latestPiece.position),
@@ -770,7 +786,8 @@ export default function Home() {
       if (completed) {
         break;
       }
-      const latestPiece = simulation._currentPieces[simulation._currentPieces.length - 1];
+      const latestPiece =
+        simulation._currentPieces[simulation._currentPieces.length - 1];
       newPixels.push({
         color: simulation.players[latestPiece.playerId].color,
         position: spiralToGrid(latestPiece.position),
@@ -869,7 +886,10 @@ export default function Home() {
                     setShowSpiralNumberRenderWarning(false);
                     return;
                   }
-                  if (isSpiralNumberRenderUnsafe && !forceSpiralNumberRenderAnyway) {
+                  if (
+                    isSpiralNumberRenderUnsafe &&
+                    !forceSpiralNumberRenderAnyway
+                  ) {
                     setRenderSpiralOptions(false, false);
                     setShowSpiralNumberRenderWarning(true);
                     return;
@@ -883,7 +903,8 @@ export default function Home() {
             {shouldShowSpiralNumberRenderWarning ? (
               <p className="text-sm text-amber-700">
                 Spiral number rendering is blocked: text may not be legible
-                and/or rendering the text may freeze the browser.{" "}
+                and/or rendering the text may freeze the browser. Consider
+                decreasing the spiral size or{" "}
                 <button
                   type="button"
                   className="underline decoration-dotted underline-offset-2 hover:text-amber-800"
@@ -892,7 +913,7 @@ export default function Home() {
                     setShowSpiralNumberRenderWarning(false);
                   }}
                 >
-                  Click here to render anyway.
+                  click here to render anyway.
                 </button>
               </p>
             ) : null}
@@ -921,7 +942,10 @@ export default function Home() {
                     setCanvasSize(nextCanvasSize);
                     if (
                       renderSpiralNumbers &&
-                      isSpiralNumberRenderUnsafeForConfig(layers, nextCanvasSize)
+                      isSpiralNumberRenderUnsafeForConfig(
+                        layers,
+                        nextCanvasSize,
+                      )
                     ) {
                       setRenderSpiralOptions(false, false);
                       setShowSpiralNumberRenderWarning(true);
@@ -1409,7 +1433,9 @@ export default function Home() {
                     min={1}
                     step={1}
                     value={animationStepCount}
-                    onChange={(event) => setAnimationStepCount(event.target.value)}
+                    onChange={(event) =>
+                      setAnimationStepCount(event.target.value)
+                    }
                     className="w-24 rounded border border-zinc-300 px-2 py-1"
                   />
                   <button
@@ -1441,7 +1467,8 @@ export default function Home() {
           ) : null}
           {animationMode && isAnimationStarted && isAnimationComplete ? (
             <p className="mt-4 text-sm text-amber-700">
-              Simulation complete. Click Start simulation to initialize a new run.
+              Simulation complete. Click Start simulation to initialize a new
+              run.
             </p>
           ) : null}
           {animationMode &&
@@ -1449,8 +1476,8 @@ export default function Home() {
           !isAnimationComplete &&
           hasAnimationConfigChanges ? (
             <p className="mt-4 text-sm text-amber-700">
-              Animation controls are hidden because configuration changed.
-              Click Start simulation to reinitialize.
+              Animation controls are hidden because configuration changed. Click
+              Start simulation to reinitialize.
             </p>
           ) : null}
         </section>
