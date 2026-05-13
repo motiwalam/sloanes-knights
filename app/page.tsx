@@ -1016,6 +1016,22 @@ export default function Home() {
                 </select>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() =>
+                setPlayers((prev) =>
+                  prev.map((player) => ({
+                    ...player,
+                    avoidPlayerIds: prev
+                      .filter((candidate) => candidate.id !== player.id)
+                      .map((candidate) => candidate.id),
+                  })),
+                )
+              }
+              className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
+            >
+              Make everyone enemies of everyone else
+            </button>
             <div className="space-y-3">
               {players.map((player, index) => {
                 const enemyOptions = players;
