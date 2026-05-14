@@ -194,6 +194,47 @@ function parseOptionalInteger(value: string): number | null {
   return Number.parseInt(value, 10);
 }
 
+function sanitizePlayerNameForFilename(name: string, index: number): string {
+  const stripped = name
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "");
+
+  const slug = stripped
+    .replace(/[^a-zA-Z0-9]+/g, "~")
+    .replace(/^~+|~+$/g, "")
+    .toLowerCase();
+
+  return slug.length > 0 ? slug : `player${index + 1}`;
+}
+
+function buildSimulationPngFilename(simulationRun: {
+  spiralSize: number;
+  players: Player[];
+  includeSpiralNumbers: boolean;
+}): string {
+  const nameToIndex = new Map(
+    simulationRun.players.map((player, index) => [player.name, index + 1]),
+  );
+  const playerNamePart = simulationRun.players
+    .map((player, index) => sanitizePlayerNameForFilename(player.name, index))
+    .join("_");
+  const enmityPart = simulationRun.players
+    .map((player, index) => {
+      const avoidIndices = player.avoidPlayers
+        .map((avoidedName) => nameToIndex.get(avoidedName))
+        .filter((avoidedIndex): avoidedIndex is number => avoidedIndex !== undefined)
+        .sort((a, b) => a - b);
+      return avoidIndices.length > 0
+        ? `${index + 1}a${avoidIndices.join("_")}`
+        : `${index + 1}a`;
+    })
+    .join("-");
+  const numbersSuffix = simulationRun.includeSpiralNumbers ? "_numbers" : "";
+  return `${playerNamePart}-${enmityPart}-${simulationRun.spiralSize}${numbersSuffix}.png`;
+}
+
 function parseSimulationSerialization(value: unknown): SimulationSerialization {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Configuration must be a JSON object.");
@@ -1195,6 +1236,26 @@ export default function Home() {
 
     const progress = runSimulationSteps(activeRun.simulation, stepCount);
     applySimulationProgress(progress);
+  }
+
+  function downloadSimulationAsPng() {
+    const canvas = canvasRef.current;
+    const activeRun = simulationRunRef.current;
+    if (!canvas || !activeRun) {
+      setError("Start a simulation before downloading the canvas.");
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = buildSimulationPngFilename({
+      ...activeRun,
+      includeSpiralNumbers: shouldRenderSpiralNumbers,
+    });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setError(null);
   }
 
   function setPlayerMoveSet(playerId: string, moves: MoveCoordinates[]) {
@@ -2235,6 +2296,13 @@ export default function Home() {
                     className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
                   >
                     Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadSimulationAsPng}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                  >
+                    Download as PNG
                   </button>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
