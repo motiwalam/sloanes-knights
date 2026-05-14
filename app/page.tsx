@@ -1303,7 +1303,7 @@ export default function Home() {
                 onClick={openExportModal}
                 className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
               >
-                Export config
+                Export
               </button>
               <button
                 type="button"
@@ -1313,7 +1313,7 @@ export default function Home() {
                 }}
                 className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
               >
-                Import config
+                Import
               </button>
               <button
                 type="button"
@@ -1323,7 +1323,7 @@ export default function Home() {
                 }}
                 className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
               >
-                Save config
+                Save
               </button>
             </div>
             <label className="flex items-center justify-between gap-3 text-sm">
