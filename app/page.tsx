@@ -701,6 +701,14 @@ export default function Home() {
     isAnimationStarted &&
     !isAnimationComplete &&
     !hasAnimationConfigChanges;
+  const animationStepsTaken = isAnimationStarted ? renderedPixels.length : 0;
+  const currentAnimationPlayerLabel =
+    players.length > 0
+      ? (() => {
+          const currentPlayer = players[animationStepsTaken % players.length];
+          return currentPlayer.name.trim() || "Unnamed player";
+        })()
+      : "N/A";
   const pixelsToRender = useMemo(
     () => (hasUnrenderedConfigChanges ? [] : renderedPixels),
     [hasUnrenderedConfigChanges, renderedPixels],
@@ -2033,6 +2041,10 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+              <p className="text-sm text-zinc-700">
+                Steps taken: {animationStepsTaken} · Current player:{" "}
+                {currentAnimationPlayerLabel}
+              </p>
             </div>
           ) : null}
           {animationMode && isAnimationStarted && isAnimationComplete ? (
