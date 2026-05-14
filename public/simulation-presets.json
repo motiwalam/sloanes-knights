@@ -556,5 +556,99 @@
         "avoidPlayers": ["Knight @(2, 1) #1", "Eland @(5, 3) #1"]
       }
     ]
+  },
+  "Karlsson's Claws": {
+    "layers": 89,
+    "canvasSize": 1000,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#010101",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": []
+      },
+      {
+        "name": "Vazir @(1, 0) #1",
+        "color": "#ff0303",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": ["Camel @(3, 1) #1"]
+      },
+      {
+        "name": "Camel @(3, 1) #1",
+        "color": "#00bfbf",
+        "moveSet": [
+          [3, 1],
+          [-3, 1],
+          [3, -1],
+          [-3, -1],
+          [1, 3],
+          [-1, 3],
+          [1, -3],
+          [-1, -3]
+        ],
+        "avoidPlayers": ["Vazir @(1, 0) #1"]
+      }
+    ]
+  },
+  "Karlsson's Archipelago": {
+    "layers": 99,
+    "canvasSize": 1000,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#010101",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Vazir @(1, 0) #1"]
+      },
+      {
+        "name": "Vazir @(1, 0) #1",
+        "color": "#ff0303",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": ["Camel @(3, 1) #1", "Knight @(2, 1) #1"]
+      },
+      {
+        "name": "Camel @(3, 1) #1",
+        "color": "#00bfbf",
+        "moveSet": [
+          [3, 1],
+          [-3, 1],
+          [3, -1],
+          [-3, -1],
+          [1, 3],
+          [-1, 3],
+          [1, -3],
+          [-1, -3]
+        ],
+        "avoidPlayers": ["Vazir @(1, 0) #1"]
+      }
+    ]
   }
 }
