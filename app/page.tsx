@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createSimulation,
-  getPixels,
   stepSimulation,
   spiralToGrid,
   type Player,
@@ -77,6 +76,11 @@ const MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE = 100_000;
 const MIN_MOVE_GRID_DIMENSION = 3;
 const MAX_MOVE_GRID_DIMENSION = 15;
 const DEFAULT_MOVE_EDITOR_GRID_DIMENSION = 5;
+const DEFAULT_SIMULATION_STEP_COUNT = "10";
+const DEFAULT_SIMULATION_SPEED = 10;
+const MIN_SIMULATION_SPEED = 1;
+const MAX_SIMULATION_SPEED = 100;
+const SIMULATION_STEPS_PER_SPEED_UNIT = 1_000;
 
 let playerIdCounter = 1;
 
@@ -667,13 +671,19 @@ export default function Home() {
     string | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [animationMode, setAnimationMode] = useState(false);
-  const [isAnimationStarted, setIsAnimationStarted] = useState(false);
-  const [isAnimationComplete, setIsAnimationComplete] = useState(false);
-  const [animationConfigSignature, setAnimationConfigSignature] = useState<
+  const [isSimulationStarted, setIsSimulationStarted] = useState(false);
+  const [isSimulationPaused, setIsSimulationPaused] = useState(false);
+  const [isSimulationComplete, setIsSimulationComplete] = useState(false);
+  const [simulationConfigSignature, setSimulationConfigSignature] = useState<
     string | null
   >(null);
-  const [animationStepCount, setAnimationStepCount] = useState("10");
+  const [simulationStepCount, setSimulationStepCount] = useState(
+    DEFAULT_SIMULATION_STEP_COUNT,
+  );
+  const [simulationSpeed, setSimulationSpeed] = useState(
+    DEFAULT_SIMULATION_SPEED,
+  );
+  const [totalStepsTaken, setTotalStepsTaken] = useState(0);
   const [moveEditorModalPlayerId, setMoveEditorModalPlayerId] = useState<
     string | null
   >(null);
@@ -689,7 +699,18 @@ export default function Home() {
   const [savePresetName, setSavePresetName] = useState("");
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const animationSimulationRef = useRef<Simulation | null>(null);
+  const simulationRunRef = useRef<{
+    id: number;
+    simulation: Simulation;
+    spiralSize: number;
+    players: Player[];
+  } | null>(null);
+  const simulationRunIdRef = useRef(0);
+  const simulationLoopTimeoutRef = useRef<number | null>(null);
+  const isSimulationPausedRef = useRef(false);
+  const simulationStepsPerBatchRef = useRef(
+    DEFAULT_SIMULATION_SPEED * SIMULATION_STEPS_PER_SPEED_UNIT,
+  );
   const previousDrawStateRef = useRef<{
     canvasSize: number;
     cellSize: number;
@@ -762,27 +783,17 @@ export default function Home() {
     showSpiralNumberRenderWarning &&
     isSpiralNumberRenderUnsafe &&
     !renderSpiralNumbers;
-  const hasAnimationConfigChanges =
+  const hasSimulationConfigChanges =
     hasUnrenderedConfigChanges ||
-    (animationConfigSignature !== null &&
-      animationConfigSignature !== currentSimulationConfigSignature);
-  const shouldShowAnimationControls =
-    animationMode &&
-    isAnimationStarted &&
-    !isAnimationComplete &&
-    !hasAnimationConfigChanges;
-  const animationStepsTaken = isAnimationStarted ? renderedPixels.length : 0;
-  const currentAnimationPlayerLabel =
-    players.length > 0
-      ? (() => {
-          const currentPlayer = players[animationStepsTaken % players.length];
-          return currentPlayer.name.trim() || "Unnamed player";
-        })()
-      : "N/A";
-  const pixelsToRender = useMemo(
-    () => (hasUnrenderedConfigChanges ? [] : renderedPixels),
-    [hasUnrenderedConfigChanges, renderedPixels],
-  );
+    (simulationConfigSignature !== null &&
+      simulationConfigSignature !== currentSimulationConfigSignature);
+  const isSimulationRunning =
+    isSimulationStarted && !isSimulationPaused && !isSimulationComplete;
+  const isStepControlsEnabled =
+    isSimulationStarted && isSimulationPaused && !isSimulationComplete;
+  const simulationStepsPerBatch =
+    simulationSpeed * SIMULATION_STEPS_PER_SPEED_UNIT;
+  const pixelsToRender = renderedPixels;
   const moveEditorTargetPlayer =
     players.find((player) => player.id === moveEditorModalPlayerId) ?? null;
   const moveEditorParse = useMemo(
@@ -937,6 +948,24 @@ export default function Home() {
     renderedSpiralNumberFontSize,
   ]);
 
+  useEffect(() => {
+    isSimulationPausedRef.current = isSimulationPaused;
+  }, [isSimulationPaused]);
+
+  useEffect(() => {
+    simulationStepsPerBatchRef.current = simulationStepsPerBatch;
+  }, [simulationStepsPerBatch]);
+
+  useEffect(
+    () => () => {
+      if (simulationLoopTimeoutRef.current !== null) {
+        window.clearTimeout(simulationLoopTimeoutRef.current);
+        simulationLoopTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
+
   function updatePlayer(
     playerId: string,
     updater: (player: EditablePlayer) => EditablePlayer,
@@ -1011,52 +1040,17 @@ export default function Home() {
     setForceSpiralNumberRenderAnyway(nextForceRenderAnyway);
   }
 
-  function runSimulation() {
-    try {
-      validateSimulationInputs();
-      const simulationPlayers = buildSimulationPlayers();
-      const simulation = createSimulation(spiralSize, simulationPlayers);
-      animationSimulationRef.current = null;
-      setIsAnimationStarted(false);
-      setIsAnimationComplete(false);
-      setAnimationConfigSignature(null);
-      setRenderedPixels(getPixels(simulation));
-      syncRenderedConfig();
-      setError(null);
-    } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "Unknown error.";
-      setError(message);
+  function clearScheduledSimulationLoop() {
+    if (simulationLoopTimeoutRef.current !== null) {
+      window.clearTimeout(simulationLoopTimeoutRef.current);
+      simulationLoopTimeoutRef.current = null;
     }
   }
 
-  function startAnimationSimulation() {
-    try {
-      validateSimulationInputs();
-      const simulationPlayers = buildSimulationPlayers();
-      animationSimulationRef.current = createSimulation(
-        spiralSize,
-        simulationPlayers,
-      );
-      setIsAnimationStarted(true);
-      setIsAnimationComplete(false);
-      setAnimationConfigSignature(currentSimulationConfigSignature);
-      setRenderedPixels([]);
-      syncRenderedConfig();
-      setError(null);
-    } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "Unknown error.";
-      setError(message);
-    }
-  }
-
-  function stepAnimationSimulation(stepCount: number) {
-    const simulation = animationSimulationRef.current;
-    if (!simulation || isAnimationComplete || hasUnrenderedConfigChanges) {
-      return;
-    }
-
+  function runSimulationSteps(
+    simulation: Simulation,
+    stepCount: number,
+  ): { newPixels: Pixel[]; completed: boolean } {
     const newPixels: Pixel[] = [];
     let completed = false;
     for (let i = 0; i < stepCount; i += 1) {
@@ -1072,41 +1066,135 @@ export default function Home() {
         spiralIndex: latestPiece.position,
       });
     }
+    return { newPixels, completed };
+  }
 
-    if (newPixels.length > 0) {
-      setRenderedPixels((prev) => [...prev, ...newPixels]);
+  function applySimulationProgress(progress: {
+    newPixels: Pixel[];
+    completed: boolean;
+  }) {
+    if (progress.newPixels.length > 0) {
+      setRenderedPixels((prev) => [...prev, ...progress.newPixels]);
+      setTotalStepsTaken((prev) => prev + progress.newPixels.length);
     }
 
-    if (completed) {
-      setIsAnimationComplete(true);
+    if (progress.completed) {
+      clearScheduledSimulationLoop();
+      setIsSimulationComplete(true);
+      setIsSimulationPaused(true);
+      isSimulationPausedRef.current = true;
     }
   }
 
-  function runAnimationUntilCompletion() {
-    const simulation = animationSimulationRef.current;
-    if (!simulation || isAnimationComplete || hasUnrenderedConfigChanges) {
+  function scheduleSimulationLoop(runId: number) {
+    clearScheduledSimulationLoop();
+    simulationLoopTimeoutRef.current = window.setTimeout(() => {
+      const activeRun = simulationRunRef.current;
+      if (
+        !activeRun ||
+        activeRun.id !== runId ||
+        isSimulationPausedRef.current
+      ) {
+        return;
+      }
+
+      const progress = runSimulationSteps(
+        activeRun.simulation,
+        simulationStepsPerBatchRef.current,
+      );
+      if (!simulationRunRef.current || simulationRunRef.current.id !== runId) {
+        return;
+      }
+
+      applySimulationProgress(progress);
+      if (!progress.completed) {
+        scheduleSimulationLoop(runId);
+      }
+    }, 0);
+  }
+
+  function startSimulation() {
+    try {
+      validateSimulationInputs();
+      const simulationPlayers = buildSimulationPlayers();
+      const runId = simulationRunIdRef.current + 1;
+      simulationRunIdRef.current = runId;
+      simulationRunRef.current = {
+        id: runId,
+        simulation: createSimulation(spiralSize, simulationPlayers),
+        spiralSize,
+        players: simulationPlayers,
+      };
+
+      clearScheduledSimulationLoop();
+      setIsSimulationStarted(true);
+      setIsSimulationPaused(false);
+      isSimulationPausedRef.current = false;
+      setIsSimulationComplete(false);
+      setSimulationConfigSignature(currentSimulationConfigSignature);
+      setRenderedPixels([]);
+      setTotalStepsTaken(0);
+      syncRenderedConfig();
+      setError(null);
+      scheduleSimulationLoop(runId);
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unknown error.";
+      setError(message);
+    }
+  }
+
+  function toggleSimulationPause() {
+    const activeRun = simulationRunRef.current;
+    if (!activeRun || !isSimulationStarted || isSimulationComplete) {
       return;
     }
 
-    const newPixels: Pixel[] = [];
-    while (true) {
-      const completed = stepSimulation(simulation);
-      if (completed) {
-        break;
-      }
-      const latestPiece =
-        simulation._currentPieces[simulation._currentPieces.length - 1];
-      newPixels.push({
-        color: simulation.players[latestPiece.playerId].color,
-        position: spiralToGrid(latestPiece.position),
-        spiralIndex: latestPiece.position,
-      });
+    if (isSimulationPaused) {
+      setIsSimulationPaused(false);
+      isSimulationPausedRef.current = false;
+      scheduleSimulationLoop(activeRun.id);
+      return;
     }
 
-    if (newPixels.length > 0) {
-      setRenderedPixels((prev) => [...prev, ...newPixels]);
+    setIsSimulationPaused(true);
+    isSimulationPausedRef.current = true;
+    clearScheduledSimulationLoop();
+  }
+
+  function resetSimulation() {
+    const activeRun = simulationRunRef.current;
+    if (!activeRun) {
+      return;
     }
-    setIsAnimationComplete(true);
+
+    const runId = simulationRunIdRef.current + 1;
+    simulationRunIdRef.current = runId;
+    simulationRunRef.current = {
+      id: runId,
+      simulation: createSimulation(activeRun.spiralSize, activeRun.players),
+      spiralSize: activeRun.spiralSize,
+      players: activeRun.players,
+    };
+
+    clearScheduledSimulationLoop();
+    setIsSimulationStarted(true);
+    setIsSimulationPaused(true);
+    isSimulationPausedRef.current = true;
+    setIsSimulationComplete(false);
+    setRenderedPixels([]);
+    setTotalStepsTaken(0);
+    setError(null);
+  }
+
+  function stepSimulationForward(stepCount: number) {
+    const activeRun = simulationRunRef.current;
+    if (!activeRun || !isStepControlsEnabled) {
+      return;
+    }
+
+    const progress = runSimulationSteps(activeRun.simulation, stepCount);
+    applySimulationProgress(progress);
   }
 
   function setPlayerMoveSet(playerId: string, moves: MoveCoordinates[]) {
@@ -2033,30 +2121,63 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={animationMode ? startAnimationSimulation : runSimulation}
-              className="rounded bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-            >
-              {animationMode ? "Start simulation" : "Run simulation"}
-            </button>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={animationMode}
-                onChange={(event) => {
-                  const nextAnimationMode = event.target.checked;
-                  setAnimationMode(nextAnimationMode);
-                  if (!nextAnimationMode) {
-                    animationSimulationRef.current = null;
-                    setIsAnimationStarted(false);
-                    setIsAnimationComplete(false);
-                    setAnimationConfigSignature(null);
-                  }
-                }}
-              />
-              Animation mode
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={startSimulation}
+                className="rounded bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              >
+                Start simulation
+              </button>
+              <span className="text-sm text-zinc-600">
+                Status:{" "}
+                {isSimulationComplete
+                  ? "Complete"
+                  : isSimulationRunning
+                    ? "Running"
+                    : isSimulationPaused
+                      ? "Paused"
+                      : "Idle"}
+              </span>
+            </div>
+            <label className="flex min-w-[20rem] flex-col gap-1 text-sm">
+              <span className="flex items-center gap-1">
+                Simulation Speed
+                <span
+                  className="cursor-help text-xs leading-none underline decoration-dotted underline-offset-2"
+                  title="Higher speed values can result in faster simulations overall but make the rendering slower."
+                  aria-label="Simulation speed help"
+                >
+                  ?
+                </span>
+              </span>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={MIN_SIMULATION_SPEED}
+                  max={MAX_SIMULATION_SPEED}
+                  step={1}
+                  value={simulationSpeed}
+                  onChange={(event) => {
+                    const nextSpeed = Math.max(
+                      MIN_SIMULATION_SPEED,
+                      Math.min(
+                        MAX_SIMULATION_SPEED,
+                        parseIntegerInput(
+                          event.target.value,
+                          DEFAULT_SIMULATION_SPEED,
+                        ),
+                      ),
+                    );
+                    setSimulationSpeed(nextSpeed);
+                  }}
+                  className="w-56"
+                />
+                <span className="min-w-[11rem] text-right font-mono text-xs text-zinc-600">
+                  {simulationStepsPerBatch.toLocaleString()} steps/batch
+                </span>
+              </div>
             </label>
           </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -2074,73 +2195,89 @@ export default function Home() {
                 : "border-zinc-300"
             }`}
           />
-          {shouldShowAnimationControls ? (
-            <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
-                <div className="sm:justify-self-start">
+          {isSimulationStarted ? (
+            <div className="mt-4 space-y-4 border-t border-zinc-200 pt-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => stepAnimationSimulation(1)}
+                    onClick={toggleSimulationPause}
+                    disabled={isSimulationComplete}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                  >
+                    {isSimulationPaused ? "Play" : "Pause"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetSimulation}
                     className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                  >
+                    Reset
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => stepSimulationForward(1)}
+                    disabled={!isStepControlsEnabled}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                   >
                     Step +1
                   </button>
-                </div>
-                <div className="flex items-end justify-center gap-2">
                   <input
                     type="number"
                     min={1}
                     step={1}
-                    value={animationStepCount}
+                    value={simulationStepCount}
                     onChange={(event) =>
-                      setAnimationStepCount(event.target.value)
+                      setSimulationStepCount(event.target.value)
                     }
-                    className="w-24 rounded border border-zinc-300 px-2 py-1"
+                    disabled={!isStepControlsEnabled}
+                    className="w-24 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                   />
                   <button
                     type="button"
                     onClick={() => {
                       const parsedStepCount = Math.max(
                         1,
-                        parseIntegerInput(animationStepCount, 10),
+                        parseIntegerInput(
+                          simulationStepCount,
+                          Number.parseInt(DEFAULT_SIMULATION_STEP_COUNT, 10),
+                        ),
                       );
-                      setAnimationStepCount(String(parsedStepCount));
-                      stepAnimationSimulation(parsedStepCount);
+                      setSimulationStepCount(String(parsedStepCount));
+                      stepSimulationForward(parsedStepCount);
                     }}
-                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                    disabled={!isStepControlsEnabled}
+                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                   >
                     Step +N
                   </button>
                 </div>
-                <div className="sm:justify-self-end">
-                  <button
-                    type="button"
-                    onClick={runAnimationUntilCompletion}
-                    className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
-                  >
-                    Run until completion
-                  </button>
-                </div>
               </div>
-              <p className="text-sm text-zinc-700">
-                Steps taken: {animationStepsTaken} · Current player:{" "}
-                {currentAnimationPlayerLabel}
-              </p>
+              <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  Total steps taken
+                </p>
+                <p className="font-mono text-lg">
+                  {totalStepsTaken.toLocaleString()}
+                </p>
+              </div>
             </div>
           ) : null}
-          {animationMode && isAnimationStarted && isAnimationComplete ? (
+          {isSimulationStarted &&
+          isSimulationComplete &&
+          !hasSimulationConfigChanges ? (
             <p className="mt-4 text-sm text-amber-700">
-              Simulation complete. Click Start simulation to initialize a new
-              run.
+              Simulation complete. Press Start simulation for a new run, or
+              Reset to replay this run from the beginning.
             </p>
           ) : null}
-          {animationMode &&
-          isAnimationStarted &&
-          !isAnimationComplete &&
-          hasAnimationConfigChanges ? (
+          {isSimulationStarted && hasSimulationConfigChanges ? (
             <p className="mt-4 text-sm text-amber-700">
-              Animation controls are hidden because configuration changed. Click
-              Start simulation to reinitialize.
+              Configuration changed while this simulation is active. The red
+              canvas outline indicates the output reflects an earlier
+              configuration.
             </p>
           ) : null}
         </section>
