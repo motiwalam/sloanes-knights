@@ -1167,6 +1167,12 @@ export default function Home() {
                           </div>
                         </div>
                         <p className="text-xs text-zinc-500">
+                          Moves:{" "}
+                          {player.moveSet.length > 0
+                            ? player.moveSet.length
+                            : "(none)"}
+                        </p>
+                        <p className="text-xs text-zinc-500">
                           Avoids:{" "}
                           {avoidedPlayerNames.length > 0
                             ? avoidedPlayerNames
