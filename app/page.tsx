@@ -1412,8 +1412,8 @@ export default function Home() {
                 />
               </label>
               <p className="text-sm text-zinc-600">
-                Spiral size: <span className="font-mono">{spiralSize}</span> =
-                (2k + 1)^2 - 1
+                Number of cells:{" "}
+                <span className="font-mono">{spiralSize.toLocaleString()}</span>
               </p>
             </div>
             <label className="flex items-center justify-between gap-3 text-sm">
@@ -1879,7 +1879,8 @@ export default function Home() {
                               <p># moves: {playerMoves.length}</p>
                               {overflowMoves.length > 0 ? (
                                 <p>
-                                  There {overflowMoves.length === 1 ? "is" : "are"}{" "}
+                                  There{" "}
+                                  {overflowMoves.length === 1 ? "is" : "are"}{" "}
                                   {overflowMoves.length} move
                                   {overflowMoves.length === 1 ? "" : "s"} not
                                   visible on the current grid:{" "}
