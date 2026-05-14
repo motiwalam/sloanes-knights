@@ -10,14 +10,40 @@ import {
   type Simulation,
   type Vec2d,
 } from "@/lib/simulation";
+import { useLocalStorage } from "@/lib/storage";
 
 import _PLAYER_PRESETS from "@/public/player-presets.json";
+import _SIMULATION_PRESETS from "@/public/simulation-presets.json";
 
 type PlayerPreset = {
   name: string;
   moveSet: [number, number][];
 };
 const PLAYER_PRESETS: PlayerPreset[] = _PLAYER_PRESETS as PlayerPreset[];
+type SerializedMove = [number, number];
+type SerializedSimulationPlayer = {
+  name: string;
+  color: string;
+  moveSet: SerializedMove[];
+  avoidPlayers: string[];
+};
+type SimulationSerialization = {
+  layers: number;
+  canvasSize: number;
+  players: SerializedSimulationPlayer[];
+};
+type SimulationPresetOption = {
+  id: string;
+  name: string;
+  source: "builtin" | "custom";
+  layers: number;
+  canvasSize: number;
+  serialization: SimulationSerialization;
+};
+const BUILTIN_SIMULATION_PRESETS = _SIMULATION_PRESETS as unknown as Record<
+  string,
+  SimulationSerialization
+>;
 
 type EditablePlayer = {
   id: string;
@@ -163,6 +189,183 @@ function parseOptionalInteger(value: string): number | null {
     return null;
   }
   return Number.parseInt(value, 10);
+}
+
+function parseSimulationSerialization(value: unknown): SimulationSerialization {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Configuration must be a JSON object.");
+  }
+  const record = value as Record<string, unknown>;
+
+  const layers = record.layers;
+  if (!Number.isInteger(layers) || (layers as number) < 0) {
+    throw new Error("Configuration layers must be a non-negative integer.");
+  }
+
+  const canvasSize = record.canvasSize;
+  if (!Number.isInteger(canvasSize) || (canvasSize as number) <= 0) {
+    throw new Error("Configuration canvasSize must be a positive integer.");
+  }
+
+  const players = record.players;
+  if (!Array.isArray(players)) {
+    throw new Error("Configuration players must be an array.");
+  }
+
+  const parsedPlayers: SerializedSimulationPlayer[] = players.map(
+    (player, index) => {
+      if (!player || typeof player !== "object" || Array.isArray(player)) {
+        throw new Error(`Configuration player ${index + 1} must be an object.`);
+      }
+      const playerRecord = player as Record<string, unknown>;
+      const name = playerRecord.name;
+      const color = playerRecord.color;
+      const moveSet = playerRecord.moveSet;
+      const avoidPlayers = playerRecord.avoidPlayers;
+
+      if (typeof name !== "string" || name.trim().length === 0) {
+        throw new Error(
+          `Configuration player ${index + 1} name must be a non-empty string.`,
+        );
+      }
+      if (typeof color !== "string" || color.trim().length === 0) {
+        throw new Error(
+          `Configuration player ${index + 1} color must be a non-empty string.`,
+        );
+      }
+      if (!Array.isArray(moveSet)) {
+        throw new Error(
+          `Configuration player ${index + 1} moveSet must be an array.`,
+        );
+      }
+      if (!Array.isArray(avoidPlayers)) {
+        throw new Error(
+          `Configuration player ${index + 1} avoidPlayers must be an array.`,
+        );
+      }
+
+      const parsedMoveSet = moveSet.map((move, moveIndex) => {
+        if (
+          !Array.isArray(move) ||
+          move.length !== 2 ||
+          !Number.isInteger(move[0]) ||
+          !Number.isInteger(move[1])
+        ) {
+          throw new Error(
+            `Configuration player ${index + 1} move ${moveIndex + 1} must be [x, y] integers.`,
+          );
+        }
+        return [move[0] as number, move[1] as number] as SerializedMove;
+      });
+
+      const parsedAvoidPlayers = avoidPlayers.map((enemy, enemyIndex) => {
+        if (typeof enemy !== "string") {
+          throw new Error(
+            `Configuration player ${index + 1} avoidPlayers[${enemyIndex}] must be a string.`,
+          );
+        }
+        return enemy.trim();
+      });
+
+      return {
+        name: name.trim(),
+        color: color.trim(),
+        moveSet: parsedMoveSet,
+        avoidPlayers: parsedAvoidPlayers,
+      };
+    },
+  );
+
+  return {
+    layers: layers as number,
+    canvasSize: canvasSize as number,
+    players: parsedPlayers,
+  };
+}
+
+function buildSimulationPresetOptions(
+  presets: Record<string, unknown>,
+  source: "builtin" | "custom",
+): SimulationPresetOption[] {
+  const options: SimulationPresetOption[] = [];
+  for (const [name, rawSerialization] of Object.entries(presets)) {
+    if (name.trim().length === 0) {
+      continue;
+    }
+    try {
+      const serialization = parseSimulationSerialization(rawSerialization);
+      options.push({
+        id: `${source}:${name}`,
+        name,
+        source,
+        layers: serialization.layers,
+        canvasSize: serialization.canvasSize,
+        serialization,
+      });
+    } catch {
+      continue;
+    }
+  }
+  return options;
+}
+
+function createEditablePlayersFromSerialization(
+  serializedPlayers: SerializedSimulationPlayer[],
+): EditablePlayer[] {
+  const nameToId = new Map<string, string>();
+  const players = serializedPlayers.map((player) => {
+    const id = `player-${playerIdCounter++}`;
+    const trimmedName = player.name.trim();
+    if (nameToId.has(trimmedName)) {
+      throw new Error(
+        `Player names must be unique; duplicate "${trimmedName}".`,
+      );
+    }
+    nameToId.set(trimmedName, id);
+    return {
+      id,
+      name: trimmedName,
+      color: player.color.trim(),
+      isFolded: true,
+      moveSet: player.moveSet.map(([x, y]) => ({
+        xInput: String(x),
+        yInput: String(y),
+      })),
+      avoidPlayerIds: [] as string[],
+    };
+  });
+
+  return players.map((player, index) => ({
+    ...player,
+    avoidPlayerIds: serializedPlayers[index].avoidPlayers.map((enemyName) => {
+      const enemyId = nameToId.get(enemyName.trim());
+      if (!enemyId) {
+        throw new Error(
+          `Player "${player.name}" avoids unknown player "${enemyName}".`,
+        );
+      }
+      return enemyId;
+    }),
+  }));
+}
+
+function toSimulationSerialization(
+  layers: number,
+  canvasSize: number,
+  players: Player[],
+): SimulationSerialization {
+  return {
+    layers,
+    canvasSize,
+    players: players.map((player) => ({
+      name: player.name,
+      color: player.color,
+      moveSet: player.moveSet.map(
+        (move) => [move.x, move.y] as [number, number],
+      ),
+      avoidPlayers: player.avoidPlayers,
+    })),
+  };
 }
 
 function moveKey(move: MoveCoordinates): string {
@@ -367,6 +570,9 @@ function getSimulationConfigurationSignature(config: {
 }
 
 export default function Home() {
+  const [customSimulationPresets, setCustomSimulationPresets] = useLocalStorage<
+    Record<string, unknown>
+  >("sloanes-knights:simulation-presets", {});
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [players, setPlayers] =
     useState<EditablePlayer[]>(createInitialPlayers);
@@ -405,6 +611,13 @@ export default function Home() {
     string | null
   >(null);
   const [bulkMoveInput, setBulkMoveInput] = useState("");
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSavePresetModalOpen, setIsSavePresetModalOpen] = useState(false);
+  const [exportedConfigJson, setExportedConfigJson] = useState("");
+  const [importConfigJson, setImportConfigJson] = useState("");
+  const [savePresetName, setSavePresetName] = useState("");
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationSimulationRef = useRef<Simulation | null>(null);
   const previousDrawStateRef = useRef<{
@@ -517,6 +730,14 @@ export default function Home() {
       (move) => !existingMoveKeys.has(moveKey(move)),
     );
   }, [bulkMoveParse.moves, bulkMoveTargetPlayer]);
+  const builtinSimulationPresetOptions = useMemo(
+    () => buildSimulationPresetOptions(BUILTIN_SIMULATION_PRESETS, "builtin"),
+    [],
+  );
+  const customSimulationPresetOptions = useMemo(
+    () => buildSimulationPresetOptions(customSimulationPresets, "custom"),
+    [customSimulationPresets],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -828,6 +1049,97 @@ export default function Home() {
     closeBulkMoveModal();
   }
 
+  function applySimulationSerialization(
+    serialization: SimulationSerialization,
+  ) {
+    const nextLayers = serialization.layers;
+    const nextPlayers = createEditablePlayersFromSerialization(
+      serialization.players,
+    );
+    setLayers(nextLayers);
+    setCanvasSize(serialization.canvasSize);
+    setPlayers(nextPlayers);
+    if (
+      renderSpiralNumbers &&
+      isSpiralNumberRenderUnsafeForConfig(nextLayers, serialization.canvasSize)
+    ) {
+      setRenderSpiralOptions(false, false);
+      setShowSpiralNumberRenderWarning(true);
+    }
+    setError(null);
+  }
+
+  function openExportModal() {
+    try {
+      validateSimulationInputs();
+      const simulationPlayers = buildSimulationPlayers();
+      const serialization = toSimulationSerialization(
+        layers,
+        canvasSize,
+        simulationPlayers,
+      );
+      setExportedConfigJson(JSON.stringify(serialization, null, 2));
+      setCopyStatus(null);
+      setIsExportModalOpen(true);
+      setError(null);
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unknown error.";
+      setError(message);
+    }
+  }
+
+  async function copyExportJsonToClipboard() {
+    try {
+      await navigator.clipboard.writeText(exportedConfigJson);
+      setCopyStatus("Copied to clipboard.");
+    } catch {
+      setCopyStatus("Clipboard copy failed.");
+    }
+  }
+
+  function importSimulationConfiguration() {
+    try {
+      const parsed = parseSimulationSerialization(JSON.parse(importConfigJson));
+      applySimulationSerialization(parsed);
+      setIsImportModalOpen(false);
+      setImportConfigJson("");
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unknown error.";
+      setError(message);
+    }
+  }
+
+  function saveSimulationConfiguration() {
+    const trimmedName = savePresetName.trim();
+    if (trimmedName.length === 0) {
+      setError("Preset name cannot be empty.");
+      return;
+    }
+
+    try {
+      validateSimulationInputs();
+      const simulationPlayers = buildSimulationPlayers();
+      const serialization = toSimulationSerialization(
+        layers,
+        canvasSize,
+        simulationPlayers,
+      );
+      setCustomSimulationPresets((previous) => ({
+        ...previous,
+        [trimmedName]: serialization,
+      }));
+      setIsSavePresetModalOpen(false);
+      setSavePresetName("");
+      setError(null);
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unknown error.";
+      setError(message);
+    }
+  }
+
   return (
     <div className="flex flex-1 bg-zinc-100 p-4 text-zinc-900">
       <main className="mx-auto grid w-full max-w-7xl gap-4 lg:grid-cols-[420px_1fr]">
@@ -848,6 +1160,92 @@ export default function Home() {
 
         <section className="space-y-4 rounded-lg border border-zinc-300 bg-white p-4">
           <h2 className="text-xl font-semibold">Simulation Controls</h2>
+
+          <div className="space-y-2 rounded border border-zinc-200 p-3">
+            <h2 className="mb-0 font-bold">Configuration</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openExportModal}
+                className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
+              >
+                Export config
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportConfigJson("");
+                  setIsImportModalOpen(true);
+                }}
+                className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
+              >
+                Import config
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSavePresetName("");
+                  setIsSavePresetModalOpen(true);
+                }}
+                className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
+              >
+                Save config
+              </button>
+            </div>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Preset</span>
+              <select
+                value=""
+                onChange={(event) => {
+                  const selectedId = event.target.value;
+                  if (!selectedId) {
+                    return;
+                  }
+                  const preset = [
+                    ...builtinSimulationPresetOptions,
+                    ...customSimulationPresetOptions,
+                  ].find((candidate) => candidate.id === selectedId);
+                  if (!preset) {
+                    setError("Unknown preset selected.");
+                    return;
+                  }
+                  try {
+                    applySimulationSerialization(preset.serialization);
+                  } catch (caught) {
+                    const message =
+                      caught instanceof Error
+                        ? caught.message
+                        : "Unknown error.";
+                    setError(message);
+                  }
+                }}
+                disabled={
+                  builtinSimulationPresetOptions.length === 0 &&
+                  customSimulationPresetOptions.length === 0
+                }
+                className="w-64 rounded border border-zinc-300 px-2 py-1 text-sm disabled:bg-zinc-100"
+              >
+                <option value="" disabled>
+                  Use preset
+                </option>
+                {builtinSimulationPresetOptions.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {`${preset.name} (k=${preset.layers}, ${preset.canvasSize}px)`}
+                  </option>
+                ))}
+                {customSimulationPresetOptions.length > 0 ? (
+                  <option value="" disabled>
+                    CUSTOM
+                  </option>
+                ) : null}
+                {customSimulationPresetOptions.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {`${preset.name} (k=${preset.layers}, ${preset.canvasSize}px)`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
             <h2 className="font-bold mb-0">Spiral settings</h2>
@@ -1734,12 +2132,16 @@ export default function Home() {
       </main>
 
       {bulkMoveTargetPlayer ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={closeBulkMoveModal}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="bulk-add-moves-title"
             className="w-full max-w-2xl rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
@@ -1834,6 +2236,137 @@ export default function Home() {
               >
                 Add {bulkPreviewMoves.length} move
                 {bulkPreviewMoves.length === 1 ? "" : "s"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isExportModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={() => setIsExportModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-config-title"
+            className="w-full max-w-2xl rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3">
+              <h2 id="export-config-title" className="text-lg font-semibold">
+                Export configuration
+              </h2>
+            </div>
+            <textarea
+              readOnly
+              value={exportedConfigJson}
+              className="h-80 w-full rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
+            />
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <p className="text-sm text-zinc-600">{copyStatus ?? ""}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={copyExportJsonToClipboard}
+                  className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+                >
+                  Copy to clipboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsExportModalOpen(false)}
+                  className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isImportModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={() => setIsImportModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-config-title"
+            className="w-full max-w-2xl rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3">
+              <h2 id="import-config-title" className="text-lg font-semibold">
+                Import configuration
+              </h2>
+            </div>
+            <textarea
+              value={importConfigJson}
+              onChange={(event) => setImportConfigJson(event.target.value)}
+              className="h-80 w-full rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
+              placeholder='{"layers": 100, "canvasSize": 1000, "players": []}'
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={importSimulationConfiguration}
+                className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isSavePresetModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={() => setIsSavePresetModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-config-title"
+            className="w-full max-w-lg rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3">
+              <h2 id="save-config-title" className="text-lg font-semibold">
+                Save configuration
+              </h2>
+            </div>
+            <label className="flex flex-col gap-1 text-sm">
+              Preset name
+              <input
+                type="text"
+                value={savePresetName}
+                onChange={(event) => setSavePresetName(event.target.value)}
+                className="rounded border border-zinc-300 px-2 py-1"
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSavePresetModalOpen(false)}
+                className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveSimulationConfiguration}
+                className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+              >
+                Save
               </button>
             </div>
           </div>

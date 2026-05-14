@@ -1,0 +1,560 @@
+{
+  "Numberphile's 2 Knights": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #2"]
+      },
+      {
+        "name": "Knight @(2, 1) #2",
+        "color": "#a51d2d",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1"]
+      }
+    ]
+  },
+  "Numberphile's 3 Knights": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #2", "Knight @(2, 1) #3"]
+      },
+      {
+        "name": "Knight @(2, 1) #2",
+        "color": "#ed333b",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1", "Knight @(2, 1) #3"]
+      },
+      {
+        "name": "Knight @(2, 1) #3",
+        "color": "#2ec27e",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1", "Knight @(2, 1) #2"]
+      }
+    ]
+  },
+  "Numberphile's 4 Knights": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#1a5fb4",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #4"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #2",
+        "color": "#ed333b",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #4"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #4",
+        "color": "#dc8add",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #3"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #3",
+        "color": "#62a0ea",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #4"
+        ]
+      }
+    ]
+  },
+  "Numberphile's 5 Knights": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#613583",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #4",
+          "Knight @(2, 1) #5"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #2",
+        "color": "#9141ac",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #4",
+          "Knight @(2, 1) #5"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #3",
+        "color": "#e01b24",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #4",
+          "Knight @(2, 1) #5"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #4",
+        "color": "#ff7800",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #5"
+        ]
+      },
+      {
+        "name": "Knight @(2, 1) #5",
+        "color": "#f9f06b",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Knight @(2, 1) #2",
+          "Knight @(2, 1) #3",
+          "Knight @(2, 1) #4"
+        ]
+      }
+    ]
+  },
+  "Numberphile's Knight/Dabbaba/Vazirs": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": [
+          "Satrap @(2, 0) #1",
+          "Vazir @(1, 0) #1",
+          "Vazir @(1, 0) #2"
+        ]
+      },
+      {
+        "name": "Satrap @(2, 0) #1",
+        "color": "#a51d2d",
+        "moveSet": [
+          [2, 0],
+          [0, 2],
+          [-2, 0],
+          [0, -2]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Vazir @(1, 0) #1",
+          "Vazir @(1, 0) #2"
+        ]
+      },
+      {
+        "name": "Vazir @(1, 0) #1",
+        "color": "#99c1f1",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Satrap @(2, 0) #1",
+          "Vazir @(1, 0) #2"
+        ]
+      },
+      {
+        "name": "Vazir @(1, 0) #2",
+        "color": "#813d9c",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": [
+          "Knight @(2, 1) #1",
+          "Satrap @(2, 0) #1",
+          "Vazir @(1, 0) #1"
+        ]
+      }
+    ]
+  },
+  "Numberphile's Knight/Zebra": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Zebra @(3, 2) #1"]
+      },
+      {
+        "name": "Zebra @(3, 2) #1",
+        "color": "#a51d2d",
+        "moveSet": [
+          [3, 2],
+          [-3, 2],
+          [3, -2],
+          [-3, -2],
+          [2, 3],
+          [-2, 3],
+          [2, -3],
+          [-2, -3]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1"]
+      }
+    ]
+  },
+  "Numberphile's 2 Vazirs/2 Fers": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Vazir @(1, 0) #1",
+        "color": "#000000",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": [
+          "Fers @(1, 1) #1",
+          "Vazir @(1, 0) #2",
+          "Fers @(1, 1) #2"
+        ]
+      },
+      {
+        "name": "Fers @(1, 1) #1",
+        "color": "#e01b24",
+        "moveSet": [
+          [1, 1],
+          [-1, 1],
+          [1, -1],
+          [-1, -1]
+        ],
+        "avoidPlayers": [
+          "Vazir @(1, 0) #1",
+          "Vazir @(1, 0) #2",
+          "Fers @(1, 1) #2"
+        ]
+      },
+      {
+        "name": "Vazir @(1, 0) #2",
+        "color": "#99c1f1",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": [
+          "Vazir @(1, 0) #1",
+          "Fers @(1, 1) #1",
+          "Fers @(1, 1) #2"
+        ]
+      },
+      {
+        "name": "Fers @(1, 1) #2",
+        "color": "#613583",
+        "moveSet": [
+          [1, 1],
+          [-1, 1],
+          [1, -1],
+          [-1, -1]
+        ],
+        "avoidPlayers": [
+          "Vazir @(1, 0) #1",
+          "Fers @(1, 1) #1",
+          "Vazir @(1, 0) #2"
+        ]
+      }
+    ]
+  },
+  "Karlsson's Bumblebee": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Aspbad @(2, 2) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 2],
+          [-2, 2],
+          [2, -2],
+          [-2, -2]
+        ],
+        "avoidPlayers": ["Spehbed @(3, 0) #1"]
+      },
+      {
+        "name": "Spehbed @(3, 0) #1",
+        "color": "#f5c211",
+        "moveSet": [
+          [3, 0],
+          [0, 3],
+          [-3, 0],
+          [0, -3]
+        ],
+        "avoidPlayers": ["Aspbad @(2, 2) #1"]
+      }
+    ]
+  },
+  "Karlsson's Spaceracers": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Antelope @(4, 3) #1"]
+      },
+      {
+        "name": "Antelope @(4, 3) #1",
+        "color": "#99c1f1",
+        "moveSet": [
+          [4, 3],
+          [-4, 3],
+          [4, -3],
+          [-4, -3],
+          [3, 4],
+          [-3, 4],
+          [3, -4],
+          [-3, -4]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1"]
+      }
+    ]
+  },
+  "Karlsson's Mosaic": {
+    "layers": 500,
+    "canvasSize": 1001,
+    "players": [
+      {
+        "name": "Knight @(2, 1) #1",
+        "color": "#000000",
+        "moveSet": [
+          [2, 1],
+          [2, -1],
+          [-2, 1],
+          [-2, -1],
+          [1, 2],
+          [-1, 2],
+          [1, -2],
+          [-1, -2]
+        ],
+        "avoidPlayers": ["Vazir @(1, 0) #1"]
+      },
+      {
+        "name": "Eland @(5, 3) #1",
+        "color": "#a51d2d",
+        "moveSet": [
+          [5, 3],
+          [-5, 3],
+          [5, -3],
+          [-5, -3],
+          [3, 5],
+          [-3, 5],
+          [3, -5],
+          [-3, -5]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1"]
+      },
+      {
+        "name": "Vazir @(1, 0) #1",
+        "color": "#99c1f1",
+        "moveSet": [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1]
+        ],
+        "avoidPlayers": ["Knight @(2, 1) #1", "Eland @(5, 3) #1"]
+      }
+    ]
+  }
+}
