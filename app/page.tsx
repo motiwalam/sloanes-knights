@@ -74,6 +74,9 @@ const DEFAULT_SPIRAL_SIZE = (2 * DEFAULT_LAYERS + 1) ** 2 - 1;
 const MAX_SPIRAL_SIZE = 2_000_000;
 const MIN_LEGIBLE_SPIRAL_NUMBER_FONT_SIZE = 8;
 const MAX_SPIRAL_NUMBER_TEXT_RENDER_SIZE = 100_000;
+const MIN_MOVE_GRID_DIMENSION = 3;
+const MAX_MOVE_GRID_DIMENSION = 15;
+const DEFAULT_MOVE_EDITOR_GRID_DIMENSION = 5;
 
 let playerIdCounter = 1;
 
@@ -171,10 +174,6 @@ function createPresetPlayerDraft(
 function parseIntegerInput(value: string, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
-}
-
-function isPartialIntegerInput(value: string): boolean {
-  return /^-?\d*$/.test(value);
 }
 
 function parseRequiredInteger(value: string, label: string): number {
@@ -447,6 +446,74 @@ function parseBulkMoveInput(input: string): {
   };
 }
 
+function parseDraftMoveSet(
+  draftMoves: EditablePlayer["moveSet"],
+): MoveCoordinates[] {
+  const moves: MoveCoordinates[] = [];
+  for (const move of draftMoves) {
+    const x = parseOptionalInteger(move.xInput);
+    const y = parseOptionalInteger(move.yInput);
+    if (x === null || y === null) {
+      continue;
+    }
+    moves.push({ x, y });
+  }
+  return dedupeMoves(moves);
+}
+
+function toDraftMoveSet(moves: MoveCoordinates[]): EditablePlayer["moveSet"] {
+  return dedupeMoves(moves).map((move) => ({
+    xInput: String(move.x),
+    yInput: String(move.y),
+  }));
+}
+
+function splitMovesByGridBounds(
+  moves: MoveCoordinates[],
+  gridDimension: number,
+): {
+  inBounds: MoveCoordinates[];
+  outOfBounds: MoveCoordinates[];
+} {
+  const radius = (gridDimension - 1) / 2;
+  const inBounds: MoveCoordinates[] = [];
+  const outOfBounds: MoveCoordinates[] = [];
+  for (const move of dedupeMoves(moves)) {
+    if (Math.abs(move.x) <= radius && Math.abs(move.y) <= radius) {
+      inBounds.push(move);
+    } else {
+      outOfBounds.push(move);
+    }
+  }
+  return { inBounds, outOfBounds };
+}
+
+function getSmallestGridDimensionForMoves(moves: MoveCoordinates[]): number {
+  let maxAbsCoordinate = 1;
+  for (const move of dedupeMoves(moves)) {
+    maxAbsCoordinate = Math.max(
+      maxAbsCoordinate,
+      Math.abs(move.x),
+      Math.abs(move.y),
+    );
+  }
+  return Math.min(
+    MAX_MOVE_GRID_DIMENSION,
+    Math.max(MIN_MOVE_GRID_DIMENSION, 2 * maxAbsCoordinate + 1),
+  );
+}
+
+function getGridCoordinates(gridDimension: number): MoveCoordinates[] {
+  const radius = (gridDimension - 1) / 2;
+  const coordinates: MoveCoordinates[] = [];
+  for (let y = radius; y >= -radius; y -= 1) {
+    for (let x = -radius; x <= radius; x += 1) {
+      coordinates.push({ x, y });
+    }
+  }
+  return coordinates;
+}
+
 type Pixel = { color: string; position: Vec2d; spiralIndex: number };
 
 function computeCellSize(canvasSize: number, layers: number): number {
@@ -607,10 +674,13 @@ export default function Home() {
     string | null
   >(null);
   const [animationStepCount, setAnimationStepCount] = useState("10");
-  const [bulkMoveModalPlayerId, setBulkMoveModalPlayerId] = useState<
+  const [moveEditorModalPlayerId, setMoveEditorModalPlayerId] = useState<
     string | null
   >(null);
-  const [bulkMoveInput, setBulkMoveInput] = useState("");
+  const [moveEditorInput, setMoveEditorInput] = useState("");
+  const [moveEditorGridDimension, setMoveEditorGridDimension] = useState(
+    DEFAULT_MOVE_EDITOR_GRID_DIMENSION,
+  );
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSavePresetModalOpen, setIsSavePresetModalOpen] = useState(false);
@@ -713,31 +783,37 @@ export default function Home() {
     () => (hasUnrenderedConfigChanges ? [] : renderedPixels),
     [hasUnrenderedConfigChanges, renderedPixels],
   );
-  const bulkMoveTargetPlayer =
-    players.find((player) => player.id === bulkMoveModalPlayerId) ?? null;
-  const bulkMoveParse = useMemo(
-    () => parseBulkMoveInput(bulkMoveInput),
-    [bulkMoveInput],
+  const moveEditorTargetPlayer =
+    players.find((player) => player.id === moveEditorModalPlayerId) ?? null;
+  const moveEditorParse = useMemo(
+    () => parseBulkMoveInput(moveEditorInput),
+    [moveEditorInput],
   );
-  const bulkPreviewMoves = useMemo(() => {
-    if (!bulkMoveTargetPlayer) {
-      return [];
-    }
-
-    const existingMoveKeys = new Set<string>();
-    for (const move of bulkMoveTargetPlayer.moveSet) {
-      const x = parseOptionalInteger(move.xInput);
-      const y = parseOptionalInteger(move.yInput);
-      if (x === null || y === null) {
-        continue;
-      }
-      existingMoveKeys.add(moveKey({ x, y }));
-    }
-
-    return bulkMoveParse.moves.filter(
+  const moveEditorMoves = useMemo(
+    () =>
+      moveEditorTargetPlayer
+        ? parseDraftMoveSet(moveEditorTargetPlayer.moveSet)
+        : [],
+    [moveEditorTargetPlayer],
+  );
+  const moveEditorGridCoordinates = useMemo(
+    () => getGridCoordinates(moveEditorGridDimension),
+    [moveEditorGridDimension],
+  );
+  const moveEditorGridSplit = useMemo(
+    () => splitMovesByGridBounds(moveEditorMoves, moveEditorGridDimension),
+    [moveEditorGridDimension, moveEditorMoves],
+  );
+  const moveEditorInBoundsMoveKeys = useMemo(
+    () => new Set(moveEditorGridSplit.inBounds.map(moveKey)),
+    [moveEditorGridSplit.inBounds],
+  );
+  const moveEditorMovesToAdd = useMemo(() => {
+    const existingMoveKeys = new Set(moveEditorMoves.map(moveKey));
+    return moveEditorParse.moves.filter(
       (move) => !existingMoveKeys.has(moveKey(move)),
     );
-  }, [bulkMoveParse.moves, bulkMoveTargetPlayer]);
+  }, [moveEditorMoves, moveEditorParse.moves]);
   const builtinSimulationPresetOptions = useMemo(
     () => buildSimulationPresetOptions(BUILTIN_SIMULATION_PRESETS, "builtin"),
     [],
@@ -1033,28 +1109,78 @@ export default function Home() {
     setIsAnimationComplete(true);
   }
 
-  function closeBulkMoveModal() {
-    setBulkMoveModalPlayerId(null);
-    setBulkMoveInput("");
+  function setPlayerMoveSet(playerId: string, moves: MoveCoordinates[]) {
+    updatePlayer(playerId, (draft) => ({
+      ...draft,
+      moveSet: toDraftMoveSet(moves),
+    }));
   }
 
-  function applyBulkMoves() {
-    if (!bulkMoveTargetPlayer || bulkPreviewMoves.length === 0) {
+  function removePlayerMove(playerId: string, moveToRemove: MoveCoordinates) {
+    updatePlayer(playerId, (draft) => {
+      const keyToRemove = moveKey(moveToRemove);
+      const nextMoves = parseDraftMoveSet(draft.moveSet).filter(
+        (move) => moveKey(move) !== keyToRemove,
+      );
+      return {
+        ...draft,
+        moveSet: toDraftMoveSet(nextMoves),
+      };
+    });
+  }
+
+  function clearPlayerMoves(playerId: string) {
+    setPlayerMoveSet(playerId, []);
+  }
+
+  function openMoveEditorModal(player: EditablePlayer) {
+    setMoveEditorModalPlayerId(player.id);
+    setMoveEditorGridDimension(DEFAULT_MOVE_EDITOR_GRID_DIMENSION);
+    setMoveEditorInput("");
+  }
+
+  function closeMoveEditorModal() {
+    setMoveEditorModalPlayerId(null);
+    setMoveEditorInput("");
+    setMoveEditorGridDimension(DEFAULT_MOVE_EDITOR_GRID_DIMENSION);
+  }
+
+  function handleMoveEditorInputChange(nextInput: string) {
+    setMoveEditorInput(nextInput);
+  }
+
+  function addMovesFromEditorInput() {
+    if (!moveEditorTargetPlayer || moveEditorParse.moves.length === 0) {
       return;
     }
+    setPlayerMoveSet(moveEditorTargetPlayer.id, [
+      ...moveEditorMoves,
+      ...moveEditorParse.moves,
+    ]);
+    setMoveEditorInput("");
+  }
 
-    updatePlayer(bulkMoveTargetPlayer.id, (draft) => ({
-      ...draft,
-      moveSet: [
-        ...draft.moveSet,
-        ...bulkPreviewMoves.map((move) => ({
-          xInput: String(move.x),
-          yInput: String(move.y),
-        })),
-      ],
-    }));
+  function clearMoveEditorMoves() {
+    if (!moveEditorTargetPlayer) {
+      return;
+    }
+    clearPlayerMoves(moveEditorTargetPlayer.id);
+  }
 
-    closeBulkMoveModal();
+  function toggleMoveInEditorGrid(move: MoveCoordinates) {
+    if (!moveEditorTargetPlayer) {
+      return;
+    }
+    const keyToToggle = moveKey(move);
+    const currentMoves = parseDraftMoveSet(moveEditorTargetPlayer.moveSet);
+    const hasMove = currentMoves.some(
+      (candidate) => moveKey(candidate) === keyToToggle,
+    );
+    const nextMoves = hasMove
+      ? currentMoves.filter((candidate) => moveKey(candidate) !== keyToToggle)
+      : [...currentMoves, move];
+
+    setPlayerMoveSet(moveEditorTargetPlayer.id, nextMoves);
   }
 
   function applySimulationSerialization(
@@ -1459,6 +1585,21 @@ export default function Home() {
                   )
                   .map((name) => (name.length > 0 ? name : "Unnamed player"))
                   .join(", ");
+                const playerMoves = parseDraftMoveSet(player.moveSet);
+                const displayGridDimension =
+                  getSmallestGridDimensionForMoves(playerMoves);
+                const displayGridCoordinates =
+                  getGridCoordinates(displayGridDimension);
+                const displayGridMoveKeys = new Set(
+                  splitMovesByGridBounds(
+                    playerMoves,
+                    displayGridDimension,
+                  ).inBounds.map(moveKey),
+                );
+                const overflowMoves = splitMovesByGridBounds(
+                  playerMoves,
+                  MAX_MOVE_GRID_DIMENSION,
+                ).outOfBounds;
 
                 return (
                   <article
@@ -1573,7 +1714,7 @@ export default function Home() {
                           </div>
                         </div>
                         <p className="text-xs text-zinc-500">
-                          Moves:{" "}
+                          # moves:{" "}
                           {player.moveSet.length > 0
                             ? player.moveSet.length
                             : "(none)"}
@@ -1682,8 +1823,8 @@ export default function Home() {
                           </label>
                         </div>
 
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center">
                             <h4 className="flex items-center gap-1 text-sm font-medium">
                               Move set (dx, dy)
                               <span
@@ -1694,124 +1835,63 @@ export default function Home() {
                                 ?
                               </span>
                             </h4>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updatePlayer(player.id, (draft) => ({
-                                    ...draft,
-                                    moveSet: [
-                                      ...draft.moveSet,
-                                      { xInput: "1", yInput: "2" },
-                                    ],
-                                  }))
-                                }
-                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
-                              >
-                                Add move
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setBulkMoveModalPlayerId(player.id);
-                                  setBulkMoveInput("");
+                          </div>
+                          <div className="flex flex-wrap items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => openMoveEditorModal(player)}
+                              className="h-44 w-44 shrink-0 cursor-pointer rounded border-2 border-zinc-300 bg-white p-1 text-left shadow-sm transition hover:border-zinc-500 hover:bg-zinc-50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                              aria-label={`Edit moveset for ${displayPlayerName}`}
+                              title="Edit moveset"
+                            >
+                              <div
+                                className="grid h-full w-full"
+                                style={{
+                                  gridTemplateColumns: `repeat(${displayGridDimension}, minmax(0, 1fr))`,
+                                  gridTemplateRows: `repeat(${displayGridDimension}, minmax(0, 1fr))`,
                                 }}
-                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
                               >
-                                Bulk add
-                              </button>
+                                {displayGridCoordinates.map((coordinate) => {
+                                  const isCenter =
+                                    coordinate.x === 0 && coordinate.y === 0;
+                                  const isReachable = displayGridMoveKeys.has(
+                                    moveKey(coordinate),
+                                  );
+                                  return (
+                                    <div
+                                      key={`${player.id}-${coordinate.x},${coordinate.y}`}
+                                      className={`border border-zinc-300/70 ${
+                                        isCenter ? "rounded-md" : ""
+                                      }`}
+                                      style={{
+                                        backgroundColor: isCenter
+                                          ? "#888888"
+                                          : isReachable
+                                            ? player.color
+                                            : "#ffffff",
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </button>
+                            <div className="min-w-[11rem] space-y-1 text-xs text-zinc-600">
+                              <p># moves: {playerMoves.length}</p>
+                              {overflowMoves.length > 0 ? (
+                                <p>
+                                  There {overflowMoves.length === 1 ? "is" : "are"}{" "}
+                                  {overflowMoves.length} move
+                                  {overflowMoves.length === 1 ? "" : "s"} not
+                                  visible on the current grid:{" "}
+                                  <span className="font-mono">
+                                    {overflowMoves
+                                      .map((move) => `(${move.x}, ${move.y})`)
+                                      .join(", ")}
+                                  </span>
+                                </p>
+                              ) : null}
                             </div>
                           </div>
-                          {player.moveSet.map((move, moveIndex) => (
-                            <div
-                              key={`${player.id}-move-${moveIndex}`}
-                              className="grid w-fit grid-cols-[auto_minmax(0,72px)_minmax(0,72px)] items-center justify-start gap-1"
-                            >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updatePlayer(player.id, (draft) => ({
-                                    ...draft,
-                                    moveSet: draft.moveSet.filter(
-                                      (_, index2) => index2 !== moveIndex,
-                                    ),
-                                  }))
-                                }
-                                className="grid h-6 w-6 place-items-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-100"
-                                aria-label={`Delete player ${index + 1} move ${moveIndex + 1}`}
-                                title="Delete move"
-                              >
-                                <svg
-                                  viewBox="0 0 16 16"
-                                  className="h-3.5 w-3.5"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    d="M3.5 3.5l9 9m0-9l-9 9"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    strokeLinecap="round"
-                                  />
-                                </svg>
-                              </button>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={move.xInput}
-                                onChange={(event) =>
-                                  updatePlayer(player.id, (draft) => {
-                                    if (
-                                      !isPartialIntegerInput(event.target.value)
-                                    ) {
-                                      return draft;
-                                    }
-                                    return {
-                                      ...draft,
-                                      moveSet: draft.moveSet.map(
-                                        (candidate, index2) =>
-                                          index2 === moveIndex
-                                            ? {
-                                                ...candidate,
-                                                xInput: event.target.value,
-                                              }
-                                            : candidate,
-                                      ),
-                                    };
-                                  })
-                                }
-                                className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
-                                aria-label={`Player ${index + 1} move ${moveIndex + 1} x`}
-                              />
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={move.yInput}
-                                onChange={(event) =>
-                                  updatePlayer(player.id, (draft) => {
-                                    if (
-                                      !isPartialIntegerInput(event.target.value)
-                                    ) {
-                                      return draft;
-                                    }
-                                    return {
-                                      ...draft,
-                                      moveSet: draft.moveSet.map(
-                                        (candidate, index2) =>
-                                          index2 === moveIndex
-                                            ? {
-                                                ...candidate,
-                                                yInput: event.target.value,
-                                              }
-                                            : candidate,
-                                      ),
-                                    };
-                                  })
-                                }
-                                className="min-w-0 rounded border border-zinc-300 px-1.5 py-1 text-sm"
-                                aria-label={`Player ${index + 1} move ${moveIndex + 1} y`}
-                              />
-                            </div>
-                          ))}
                         </div>
 
                         <div className="space-y-1">
@@ -2143,111 +2223,262 @@ export default function Home() {
         </section>
       </main>
 
-      {bulkMoveTargetPlayer ? (
+      {moveEditorTargetPlayer ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
-          onClick={closeBulkMoveModal}
+          onClick={closeMoveEditorModal}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="bulk-add-moves-title"
-            className="w-full max-w-2xl rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
+            aria-labelledby="move-editor-title"
+            className="w-full max-w-5xl rounded-lg border border-zinc-300 bg-white p-4 shadow-lg"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <h2 id="bulk-add-moves-title" className="text-lg font-semibold">
-                  Bulk add moves
+                <h2 id="move-editor-title" className="text-lg font-semibold">
+                  Create moveset
                 </h2>
-                <p className="text-sm text-zinc-600">
-                  Target: {bulkMoveTargetPlayer.name.trim() || "Unnamed player"}
+                <p className="text-sm text-zinc-500">
+                  Target:{" "}
+                  {moveEditorTargetPlayer.name.trim() || "Unnamed player"}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeBulkMoveModal}
-                className="rounded border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-100"
-              >
-                Close
-              </button>
             </div>
 
-            <p className="mb-2 text-sm text-zinc-700">
-              Enter one move per line. Supported formats include{" "}
-              <span className="font-mono">(x, y)</span>,{" "}
-              <span className="font-mono">x y</span>,{" "}
-              <span className="font-mono">x, y</span>,{" "}
-              <span className="font-mono">[x, y]</span>. Prefix with{" "}
-              <span className="font-mono">@</span> to add all symmetries.
-            </p>
-
-            <textarea
-              value={bulkMoveInput}
-              onChange={(event) => setBulkMoveInput(event.target.value)}
-              className="mb-3 h-44 w-full rounded border border-zinc-300 px-2 py-1 font-mono text-sm"
-              placeholder={"(1, 2)\n@ (2, 1)\n-3 4"}
-            />
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <h3 className="mb-1 text-sm font-medium">
-                  Preview ({bulkPreviewMoves.length} moves to add)
-                </h3>
-                <div className="max-h-44 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 text-sm">
-                  {bulkPreviewMoves.length === 0 ? (
-                    <p className="text-zinc-500">No new moves detected.</p>
-                  ) : (
-                    <div className="font-mono">
-                      {bulkPreviewMoves.map((move) => (
-                        <div key={moveKey(move)}>
-                          ({move.x}, {move.y})
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            <div className="grid grid-cols-2 gap-4">
+              <section className="space-y-3 rounded border border-zinc-200 bg-zinc-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium">
+                    Draw where the piece can move...
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMoveEditorGridDimension((prev) =>
+                          Math.max(MIN_MOVE_GRID_DIMENSION, prev - 2),
+                        )
+                      }
+                      disabled={
+                        moveEditorGridDimension <= MIN_MOVE_GRID_DIMENSION
+                      }
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+                    >
+                      -
+                    </button>
+                    <span className="font-mono text-xs">
+                      {moveEditorGridDimension}x{moveEditorGridDimension}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMoveEditorGridDimension((prev) =>
+                          Math.min(MAX_MOVE_GRID_DIMENSION, prev + 2),
+                        )
+                      }
+                      disabled={
+                        moveEditorGridDimension >= MAX_MOVE_GRID_DIMENSION
+                      }
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <h3 className="mb-1 text-sm font-medium">
-                  Parse issues ({bulkMoveParse.invalidLines.length})
-                </h3>
-                <div className="max-h-44 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 text-sm">
-                  {bulkMoveParse.invalidLines.length === 0 ? (
-                    <p className="text-zinc-500">No parse issues.</p>
-                  ) : (
-                    <div className="space-y-1 text-red-700">
-                      {bulkMoveParse.invalidLines.map((invalid) => (
-                        <div key={`${invalid.lineNumber}-${invalid.content}`}>
-                          Line {invalid.lineNumber}:{" "}
-                          <span className="font-mono">
-                            {invalid.content || "(empty)"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="mx-auto h-80 w-80 max-w-full rounded border border-zinc-300 bg-white p-1">
+                  <div
+                    className="grid h-full w-full"
+                    style={{
+                      gridTemplateColumns: `repeat(${moveEditorGridDimension}, minmax(0, 1fr))`,
+                      gridTemplateRows: `repeat(${moveEditorGridDimension}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {moveEditorGridCoordinates.map((coordinate) => {
+                      const isCenter = coordinate.x === 0 && coordinate.y === 0;
+                      const isReachable = moveEditorInBoundsMoveKeys.has(
+                        moveKey(coordinate),
+                      );
+                      return (
+                        <button
+                          key={`move-editor-cell-${coordinate.x},${coordinate.y}`}
+                          type="button"
+                          disabled={isCenter}
+                          onClick={() => toggleMoveInEditorGrid(coordinate)}
+                          className={`border border-zinc-300/70 ${
+                            isCenter
+                              ? "cursor-default rounded-xl"
+                              : "cursor-pointer hover:bg-zinc-100"
+                          }`}
+                          style={{
+                            backgroundColor: isCenter
+                              ? "#888888"
+                              : isReachable
+                                ? moveEditorTargetPlayer.color
+                                : "#ffffff",
+                          }}
+                          aria-label={
+                            isCenter
+                              ? "Piece position"
+                              : `Toggle move (${coordinate.x}, ${coordinate.y})`
+                          }
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+                {moveEditorGridSplit.outOfBounds.length > 0 ? (
+                  <div className="space-y-1 text-xs text-zinc-600">
+                    <p>
+                      There{" "}
+                      {moveEditorGridSplit.outOfBounds.length === 1
+                        ? "is"
+                        : "are"}{" "}
+                      {moveEditorGridSplit.outOfBounds.length} move
+                      {moveEditorGridSplit.outOfBounds.length === 1
+                        ? ""
+                        : "s"}{" "}
+                      not visible on the current grid
+                    </p>
+                    <div className="h-24 overflow-auto rounded border border-zinc-200 p-1.5">
+                      <div className="space-y-1">
+                        {moveEditorGridSplit.outOfBounds.map((move) => (
+                          <div
+                            key={`move-editor-overflow-${moveKey(move)}`}
+                            className="flex items-center gap-1 font-mono"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                moveEditorTargetPlayer &&
+                                removePlayerMove(
+                                  moveEditorTargetPlayer.id,
+                                  move,
+                                )
+                              }
+                              className="grid h-4 w-4 place-items-center rounded text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                              aria-label={`Delete move (${move.x}, ${move.y})`}
+                              title="Delete move"
+                            >
+                              <svg
+                                viewBox="0 0 16 16"
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  d="M3.5 3.5l9 9m0-9l-9 9"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </button>
+                            <span>
+                              ({move.x}, {move.y})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={clearMoveEditorMoves}
+                    disabled={moveEditorMoves.length === 0}
+                    className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-3 rounded border border-zinc-200 bg-zinc-50 p-3">
+                <h3 className="text-sm font-medium">...or type it in</h3>
+                <p className="text-sm text-zinc-700">
+                  Enter one move per line. Supported formats include{" "}
+                  <span className="font-mono">(x, y)</span>,{" "}
+                  <span className="font-mono">x y</span>,{" "}
+                  <span className="font-mono">x, y</span>,{" "}
+                  <span className="font-mono">[x, y]</span>. Prefix with{" "}
+                  <span className="font-mono">@</span> to add all symmetries.
+                  Click Add to apply parsed moves to the moveset.
+                </p>
+                <div className="grid h-32 w-full">
+                  <textarea
+                    value={moveEditorInput}
+                    onChange={(event) =>
+                      handleMoveEditorInputChange(event.target.value)
+                    }
+                    className="col-start-1 row-start-1 h-full w-full resize-none rounded border border-zinc-300 px-2 py-1 pb-12 pr-16 font-mono text-sm"
+                    placeholder={"(1, 2)\n@ (2, 1)\n-3 4"}
+                  />
+                  <button
+                    type="button"
+                    onClick={addMovesFromEditorInput}
+                    disabled={moveEditorParse.moves.length === 0}
+                    className="col-start-1 row-start-1 z-10 mr-2 mb-2 place-self-end rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">
+                      Parsed moves ({moveEditorParse.moves.length})
+                    </h4>
+                    <div className="max-h-44 overflow-auto rounded border border-zinc-200 bg-white p-2 text-sm">
+                      {moveEditorParse.moves.length === 0 ? (
+                        <p className="text-zinc-500">No parsed moves.</p>
+                      ) : (
+                        <div className="font-mono">
+                          {moveEditorParse.moves.map((move) => (
+                            <div key={`move-editor-list-${moveKey(move)}`}>
+                              ({move.x}, {move.y})
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-600">
+                      New moves to add: {moveEditorMovesToAdd.length}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">
+                      Parse issues ({moveEditorParse.invalidLines.length})
+                    </h4>
+                    <div className="max-h-44 overflow-auto rounded border border-zinc-200 bg-white p-2 text-sm">
+                      {moveEditorParse.invalidLines.length === 0 ? (
+                        <p className="text-zinc-500">No parse issues.</p>
+                      ) : (
+                        <div className="space-y-1 text-red-700">
+                          {moveEditorParse.invalidLines.map((invalid) => (
+                            <div
+                              key={`${invalid.lineNumber}-${invalid.content}`}
+                            >
+                              Line {invalid.lineNumber}:{" "}
+                              <span className="font-mono">
+                                {invalid.content || "(empty)"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
-
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                onClick={closeBulkMoveModal}
+                onClick={closeMoveEditorModal}
                 className="rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={applyBulkMoves}
-                disabled={bulkPreviewMoves.length === 0}
-                className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              >
-                Add {bulkPreviewMoves.length} move
-                {bulkPreviewMoves.length === 1 ? "" : "s"}
+                Close
               </button>
             </div>
           </div>
