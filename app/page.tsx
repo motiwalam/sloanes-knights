@@ -1658,6 +1658,13 @@ export default function Home() {
             <div className="space-y-3">
               {players.map((player, index) => {
                 const enemyOptions = players;
+                const hasAvailableNonSelfEnemy = enemyOptions.some(
+                  (candidate) =>
+                    candidate.id !== player.id &&
+                    !player.avoidPlayerIds.includes(candidate.id),
+                );
+                const canAddSelfEnemy = !player.avoidPlayerIds.includes(player.id);
+                const canAddAnyEnemy = hasAvailableNonSelfEnemy || canAddSelfEnemy;
                 const isFolded = player.isFolded;
                 const trimmedPlayerName = player.name.trim();
                 const displayPlayerName =
@@ -2000,13 +2007,27 @@ export default function Home() {
                                 type="button"
                                 onClick={() =>
                                   updatePlayer(player.id, (draft) => {
-                                    const availableEnemy = enemyOptions.find(
+                                    const availableNonSelfEnemy =
+                                      enemyOptions.find(
+                                        (candidate) =>
+                                          candidate.id !== player.id &&
+                                          !draft.avoidPlayerIds.includes(
+                                            candidate.id,
+                                          ),
+                                      );
+                                    const availableSelfEnemy = enemyOptions.find(
                                       (candidate) =>
+                                        candidate.id === player.id &&
                                         !draft.avoidPlayerIds.includes(
                                           candidate.id,
                                         ),
                                     );
-                                    if (!availableEnemy) return draft;
+                                    const availableEnemy =
+                                      availableNonSelfEnemy ??
+                                      availableSelfEnemy;
+                                    if (!availableEnemy) {
+                                      return draft;
+                                    }
                                     return {
                                       ...draft,
                                       avoidPlayerIds: [
@@ -2016,7 +2037,8 @@ export default function Home() {
                                     };
                                   })
                                 }
-                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100"
+                                disabled={!canAddAnyEnemy}
+                                className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                               >
                                 Add enemy
                               </button>
