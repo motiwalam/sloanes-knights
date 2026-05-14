@@ -850,7 +850,7 @@ export default function Home() {
           <h2 className="text-xl font-semibold">Simulation Controls</h2>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <h2 className="font-bold">Spiral settings</h2>
+            <h2 className="font-bold mb-0">Spiral settings</h2>
             <div className="space-y-1">
               <label className="flex items-center justify-between gap-3 text-sm">
                 <span>Layers (k)</span>
@@ -867,7 +867,10 @@ export default function Home() {
                     setLayers(nextLayers);
                     if (
                       renderSpiralNumbers &&
-                      isSpiralNumberRenderUnsafeForConfig(nextLayers, canvasSize)
+                      isSpiralNumberRenderUnsafeForConfig(
+                        nextLayers,
+                        canvasSize,
+                      )
                     ) {
                       setRenderSpiralOptions(false, false);
                       setShowSpiralNumberRenderWarning(true);
@@ -877,8 +880,8 @@ export default function Home() {
                 />
               </label>
               <p className="text-sm text-zinc-600">
-                Spiral size: <span className="font-mono">{spiralSize}</span> = (2k
-                + 1)^2 - 1
+                Spiral size: <span className="font-mono">{spiralSize}</span> =
+                (2k + 1)^2 - 1
               </p>
             </div>
             <label className="flex items-center justify-between gap-3 text-sm">
@@ -930,7 +933,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <h2 className="font-bold">Canvas settings</h2>
+            <h2 className="font-bold mb-0">Canvas settings</h2>
             <div className="grid grid-cols-1 gap-2">
               <div className="space-y-1">
                 <label className="flex items-center justify-between gap-3 text-sm">
@@ -974,7 +977,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-2 rounded border border-zinc-200 p-3">
-            <h2 className="font-bold">Player settings</h2>
+            <h2 className="font-bold mb-0">Player settings</h2>
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm">Add players</p>
               <div className="flex items-center gap-2">
